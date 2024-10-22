@@ -13,3 +13,4 @@ nltk
 python-dotenv
 bitsandbytes
 git+https://github.com/kozistr/pytorch_optimizer.git
+accelerate>=0.26.0

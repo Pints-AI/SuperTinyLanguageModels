@@ -50,10 +50,12 @@ class RoPEAttention(Attention):
 
         # Compute frequencies for RoPE and register as buffer
         # buffering is necessary to ensure correct device
-        freqs_cis = compute_freqs_cis(
-            max_seq_len=context_window,
-            head_dim=hidden_dim // num_q_heads
+        freqs_cis = precompute_freqs_cis(
+            dim=hidden_dim/num_q_heads,
+            end=context_window*2,
+            theta=10_000
         )
+
         self.register_buffer('freqs_cis', freqs_cis)
 
 
@@ -74,7 +76,7 @@ class RoPEAttention(Attention):
         
         k = k.reshape(B, S, self.num_kv_heads, self.group_hidden_dim//self.num_kv_heads)
         q = q.reshape(B, S, self.num_q_heads, self.group_hidden_dim//self.num_kv_heads)
-        v = v.reshape(B, self.num_kv_heads, S, self.group_hidden_dim//self.num_kv_heads)
+        v = v.reshape(B, S, self.num_kv_heads, self.group_hidden_dim//self.num_kv_heads)
 
         # apply rope embedding
         q, k = apply_rotary_emb(
@@ -82,12 +84,15 @@ class RoPEAttention(Attention):
             k=k, 
             freqs_cis=self.freqs_cis[:S]
         )
-        q = q.transpose(1, 2)
-        k = k.transpose(1, 2)
 
         # reshape to have same dim as q
         k = k.repeat_interleave(self.num_q_heads//self.num_kv_heads, dim=1)
         v = v.repeat_interleave(self.num_q_heads//self.num_kv_heads, dim=1)
+
+
+        q = q.transpose(1, 2)
+        k = k.transpose(1, 2)
+        v = v.transpose(1, 2)
 
         # reshape attn_mask
         if attn_mask is not None:
@@ -111,7 +116,17 @@ class RoPEAttention(Attention):
         return y 
 
 
-def _reshape_for_broadcast(freqs_cis, x):
+
+# taken from https://github.com/meta-llama/llama3/blob/main/llama/model.py
+def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
+    freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
+    t = torch.arange(end, device=freqs.device, dtype=torch.float32)
+    freqs = torch.outer(t, freqs)
+    freqs_cis = torch.polar(torch.ones_like(freqs), freqs)  # complex64
+    return freqs_cis
+
+
+def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
     ndim = x.ndim
     assert 0 <= 1 < ndim
     assert freqs_cis.shape == (x.shape[1], x.shape[-1])
@@ -119,24 +134,26 @@ def _reshape_for_broadcast(freqs_cis, x):
     return freqs_cis.view(*shape)
 
 
-def apply_rotary_emb(q, k, freqs_cis):
-    """
-    Apply the rotary embedding to the query and key
-    """
-    q_ = torch.view_as_complex(q.float().reshape(*q.shape[:-1], -1, 2))
-    k_ = torch.view_as_complex(k.float().reshape(*k.shape[:-1], -1, 2))
-    freqs_cis = _reshape_for_broadcast(freqs_cis, q_)
-    q_out = torch.view_as_real(q_ * freqs_cis).flatten(3)
-    k_out = torch.view_as_real(k_ * freqs_cis).flatten(3)
-    return q_out.type_as(q), k_out.type_as(k)
+def apply_rotary_emb(
+    xq: torch.Tensor,
+    xk: torch.Tensor,
+    freqs_cis: torch.Tensor,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
+    xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
+    freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
+    xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(3)
+    xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(3)
+    return xq_out.type_as(xq), xk_out.type_as(xk)
 
 
-def compute_freqs_cis(max_seq_len, head_dim):
-    """Computes complex frequences used for rotary positional encodings"""
-    freqs = 1.0 / (
-        10_000 ** (torch.arange(0, head_dim, 2)[: (head_dim // 2)].float() / head_dim)
+def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
+    """torch.repeat_interleave(x, dim=2, repeats=n_rep)"""
+    bs, slen, n_kv_heads, head_dim = x.shape
+    if n_rep == 1:
+        return x
+    return (
+        x[:, :, :, None, :]
+        .expand(bs, slen, n_kv_heads, n_rep, head_dim)
+        .reshape(bs, slen, n_kv_heads * n_rep, head_dim)
     )
-    t = torch.arange(max_seq_len * 2, device=freqs.device, dtype=torch.float32)
-    freqs = torch.outer(t, freqs)
-    freqs_cis = torch.polar(torch.ones_like(freqs), freqs)  # complex64
-    return freqs_cis
