@@ -3,7 +3,7 @@ TODO
 """
 import torch 
 from models.components.attention import Attention
-from typing import Optional
+from typing import Optional, Tuple
 
 
 
@@ -51,7 +51,7 @@ class RoPEAttention(Attention):
         # Compute frequencies for RoPE and register as buffer
         # buffering is necessary to ensure correct device
         freqs_cis = precompute_freqs_cis(
-            dim=hidden_dim/num_q_heads,
+            dim=hidden_dim//num_q_heads,
             end=context_window*2,
             theta=10_000
         )
@@ -80,14 +80,17 @@ class RoPEAttention(Attention):
 
         # apply rope embedding
         q, k = apply_rotary_emb(
-            q=q, 
-            k=k, 
+            xq=q, 
+            xk=k, 
             freqs_cis=self.freqs_cis[:S]
         )
 
         # reshape to have same dim as q
-        k = k.repeat_interleave(self.num_q_heads//self.num_kv_heads, dim=1)
-        v = v.repeat_interleave(self.num_q_heads//self.num_kv_heads, dim=1)
+        k = repeat_kv(k, self.num_q_heads//self.num_kv_heads)
+        v = repeat_kv(v, self.num_q_heads//self.num_kv_heads)
+        
+        # k = k.repeat_interleave(self.num_q_heads//self.num_kv_heads, dim=2)
+        # v = v.repeat_interleave(self.num_q_heads//self.num_kv_heads, dim=2)
 
 
         q = q.transpose(1, 2)

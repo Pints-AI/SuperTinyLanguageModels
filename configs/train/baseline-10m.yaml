@@ -84,8 +84,8 @@ trainer:
   lr_scheduler:
     name: ExponentialLR
     params: 
-      gamma: 0.999
-      warmup_steps: 5000
+      gamma: 0.9995
+      warmup_steps: 1000
 
 
   dataloader:
