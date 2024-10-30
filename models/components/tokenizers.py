@@ -350,8 +350,7 @@ class BPETokenizer:
             char = chr(byte)
             token_id = self.vocab.get(char, self.unk_token)
             token_ids.append(token_id)
-        
-        token_ids.append(self.eot_token)  # Append end-of-text token
+
         assert all([type(i)==int for i in token_ids]), token_ids
         assert len(token_ids)>0, token_ids
         return token_ids
