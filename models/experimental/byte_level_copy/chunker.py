@@ -17,11 +17,7 @@ workflow:
 
 compute loss between the two OHE
 
-Questions:
-1. 
 """
-import hydra
-
 import torch
 import torch.nn.functional as F
 from typing import List
@@ -32,7 +28,14 @@ from models.embedding_models import EmbedderInterface
 from models.components.tokenizers import build_tokenizer, TokenizerClass
 from models.components.transformer_blocks import GenericTransformerBlock
 
-# This config is from byte_autoencoder_3.yaml. We copy paste as a dictionary for ease use, since Hydra was not being kind to us.
+
+INPUT = [
+    # "i like machine learning",
+    # "anton is running",
+    "finetuning LLMs is as simple as ordering a pint of beer!"
+]
+
+# This config is from byte_autoencoder_3.yaml. Copy-pasted for now.
 CONFIG = {
     "model": {
         "core_model_type": "pass_through",
@@ -116,7 +119,7 @@ CONFIG = {
             "eval_dir": "evals"
         },
         "seed": 489,
-        "device": "cuda"
+        "device": "cpu"
     }
 }
 
@@ -147,7 +150,7 @@ def conversion_to_bytes(
 ) ->  List[bytes]:
     return byte_tokenizer.encode(string)
 
-def get_canonical_tokenizer(tokenizer='o200k_base'):
+def get_canonical_tokenizer(tokenizer: str='o200k_base'):
     return tiktoken.get_encoding(tokenizer)
 
 
@@ -157,7 +160,7 @@ class CustomByteLevelEmbedder(EmbedderInterface):
     Input is a sequence of byte-level token ids
     """
 
-    def __init__(self, model_cfg):
+    def __init__(self, model_cfg: dict, device: str="cpu"):
         super().__init__()
         self.model_cfg = model_cfg
 
@@ -178,7 +181,7 @@ class CustomByteLevelEmbedder(EmbedderInterface):
         self.byte_embedder = torch.nn.Embedding(
             num_embeddings=model_cfg["vocab_size"],
             embedding_dim=model_cfg["byte_hidden"],
-            # device="cuda"
+            device=device
         ) #259*32  
 
         self.delimiter_model = EndByteClassifier(
@@ -190,7 +193,7 @@ class CustomByteLevelEmbedder(EmbedderInterface):
         self.pad_token_id = self.byte_tokenizer.pad_token
         self.eot_token = self.byte_tokenizer.eot_token
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor):
         # x: (batch_size, seq_len)
         x_embedded = self.byte_embedder(x)  # (batch_size, seq_len, byte_hidden)
 
@@ -200,15 +203,19 @@ class CustomByteLevelEmbedder(EmbedderInterface):
         )
         return probs_end_tokens
 
-    def tokenize_input(self, input_string, truncate=False, add_eot=False):
+    def tokenize_input(self,
+                       input_string:str,
+                       truncate:bool=False,
+                       add_eot:bool=False) -> List[int]:
         token_ids = self.byte_tokenizer.encode(input_string)
         if add_eot:
             token_ids.append(self.eot_token)
+
         return token_ids
 
-    def decode(self, tokens):
+    def decode(self, tokens: List[int]):
         """ Decode a tensor of tokens into a string. """
-        return self.byte_tokenizer.decode_batch(tokens)
+        return self.byte_tokenizer.decode(tokens)
 
 
 # Referenced from TokenizerEncoder
@@ -217,7 +224,7 @@ class EndByteClassifier(torch.nn.Module):
     Take seq of byte embeddings, return transformed sequence and attention mask.
     """
 
-    def __init__(self, num_delimiter_layers, byte_hidden):
+    def __init__(self, num_delimiter_layers: int, byte_hidden: int):
         super().__init__()
 
         self.num_delimiter_layers = num_delimiter_layers
@@ -272,36 +279,54 @@ class EndByteClassifier(torch.nn.Module):
 
         return probs
     
-def find_end_characters(tokens: List[str]) -> torch.Tensor:
+def find_end_characters(tokens: List[str]) -> List[int]:
+    """
+    Identify which characters are the end chars of the token they belong to
+    """
     binary_values = []
     for canonical_token in tokens:
         binary_token = [0] * (len(canonical_token) - 1) + [1]
         binary_values.extend(binary_token)
-    return torch.tensor(binary_values)
+    return binary_values
 
 
 def start(cfg):
-    custom_embedder = CustomByteLevelEmbedder(cfg['model'])
-    user_input = input("Insert string: ")
-    user_input_bytes = torch.tensor(custom_embedder.tokenize_input(user_input)).unsqueeze(0) # --> bytes, not in cuda yet
+    custom_embedder = CustomByteLevelEmbedder(cfg['model'], cfg['general']['device'])
+    # user_input = input("Insert string: ")
+    user_input = INPUT
+    batch_input_bytes_tokens: List[List[int]] = []
+    for input_string in user_input:
+        input_bytes_tokens = custom_embedder.tokenize_input(input_string)
+        batch_input_bytes_tokens.append(input_bytes_tokens)
 
-    end_bytes_probs = custom_embedder(user_input_bytes)
-    print("Using Custom Embedder")
+    end_bytes_probs = custom_embedder(torch.tensor(batch_input_bytes_tokens))
+    print("Using Custom Embedder:")
     print("="*80)
     print(f"Output: {end_bytes_probs}")
     print("="*80)
 
     canonical_tokenizer = get_canonical_tokenizer()
-    canonical_tokens_ids = canonical_tokenizer.encode(user_input)
-    canonical_tokens = [canonical_tokenizer.decode_single_token_bytes(token_id) for token_id in canonical_tokens_ids]
-    end_chars_pos = find_end_characters(canonical_tokens).unsqueeze(0)
+    batch_canonical_tokens: List[bytes] = []
+    batch_end_chars_pos: List[int] = []
+    for input_string in user_input:
+        canonical_tokens_ids = canonical_tokenizer.encode(input_string)
+        canonical_tokens = [
+            canonical_tokenizer.decode_single_token_bytes(token_id)
+            for token_id in canonical_tokens_ids
+        ]
+        end_chars_pos = find_end_characters(canonical_tokens)
+
+        batch_canonical_tokens.append(canonical_tokens)
+        batch_end_chars_pos.append(end_chars_pos)
+
     print("Using Canonical Tokenizer: ")
     print("="*80)
-    print(f"Canonical tokens:  {canonical_tokens}")
-    print(end_chars_pos)
+    print(f"Canonical tokens:")
+    for canonical_tokens, end_chars_pos in zip(batch_canonical_tokens, batch_end_chars_pos):
+        print(canonical_tokens)
+        print(end_chars_pos)
     print("="*80)
-
-    print(f"Loss value: {compute_loss_for_end_token(end_chars_pos, end_bytes_probs)}")
+    print(f"Loss value: {compute_loss_for_end_token(torch.tensor(batch_end_chars_pos), end_bytes_probs)}")
 
 
 if __name__ == "__main__":
