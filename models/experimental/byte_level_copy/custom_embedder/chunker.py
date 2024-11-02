@@ -114,10 +114,10 @@ CONFIG = {
             "group_name": "experimental_byte_level"
         },
         "paths": {
-            "output_dir": "outputs",
-            "data_dir": "data",
-            "checkpoint_dir": "checkpoints",
-            "eval_dir": "evals"
+            "output_dir": "/media/pints/Data/SuperTinyLanguageModels/outputs",
+            "data_dir":  "/media/pints/Data/SuperTinyLanguageModels/data",
+            "checkpoint_dir": "/media/pints/Data/SuperTinyLanguageModels/checkpoints",
+            "eval_dir": "/media/pints/Data/SuperTinyLanguageModels/evals"
         },
         "seed": 489,
         "device": "cpu"
@@ -133,8 +133,12 @@ def compute_loss_for_end_token(
         "<predictions> and <targets> should have the same shape."
     )
     
+    # element-wise MSE across `dim`, without reducing over batch dimension
     mse_loss = F.mse_loss(predictions, targets, reduction='none')
-    return mse_loss.mean(dim=tuple(range(1, mse_loss.ndim)), keepdim=True)
+    # mean over embedding dim
+    mse_loss_per_batch = mse_loss.mean(dim=1)
+    # mean over batch dim
+    return mse_loss_per_batch.mean()
 
 
 def initialize_byte_tokenizer():

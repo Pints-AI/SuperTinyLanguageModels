@@ -45,8 +45,9 @@ class EmbedderPreProcessor(BasePreProcessor):
         self.canonical_tokenizer = canonical_tokenizer
 
     def process(self, sample):
-        ids = self.embedder.tokenize_input(sample["text"])
-        canonical_tokens_ids = self.canonical_tokenizer.encode(sample["text"])
+        text = sample["text"]
+        ids = self.embedder.tokenize_input(text)
+        canonical_tokens_ids = self.canonical_tokenizer.encode(text)
         canonical_tokens = [
             self.canonical_tokenizer.decode_single_token_bytes(token_id)
             for token_id in canonical_tokens_ids
@@ -98,7 +99,7 @@ class EmbedderPreProcessor(BasePreProcessor):
                 batch = filtered_dset.shard(
                     num_shards=total_batches, index=batch_idx, contiguous=True
                 ).with_format("numpy")
-                arr_batch = np.concatenate(batch["ids"])
+                arr_batch = np.concatenate(batch["labels"])
                 # Write into memory-mapped array
                 arr_labels[idx : idx + len(arr_batch)] = arr_batch
                 idx += len(arr_batch)
@@ -138,8 +139,9 @@ def prepare_data(
 
     if tokenized_data_folder.exists():
         print(f"Tokenized data already exists at {tokenized_data_folder}.")
+        return
     # create dir if it does not exist
-    tokenized_data_folder.parent.mkdir(parents=True, exist_ok=True)
+    tokenized_data_folder.mkdir(parents=True, exist_ok=True)
 
     # Load the dataset
     split_dataset = load_data(dataset_names=dataset_names)
@@ -172,6 +174,9 @@ def prepare_data(
     except Exception as exc:
         print(f"Error during data processing: {exc}")
         # Clean up partial files
-        for file in tokenized_data_folder.iterdir():
-            file.unlink()  # Remove each file
+        if tokenized_data_folder.exists():
+            for file in tokenized_data_folder.iterdir():
+                if file.is_file():
+                    file.unlink()
+            tokenized_data_folder.rmdir()  # Remove the now-empty folder
         raise RuntimeError("Failed to process and write data.") from exc

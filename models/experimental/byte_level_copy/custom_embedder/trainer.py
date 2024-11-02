@@ -1,60 +1,85 @@
 import torch
 import torch.optim as optim
+from pathlib import Path
 
+from torch.utils.data import DataLoader
+
+from models.experimental.byte_level_copy.custom_embedder.dataset_preparation.prepare import prepare_data
 from models.experimental.byte_level_copy.custom_embedder.chunker import (
+    get_canonical_tokenizer, 
+    compute_loss_for_end_token,
     CustomByteLevelEmbedder, 
-    compute_loss_for_end_token, 
-    find_end_characters, 
-    get_canonical_tokenizer,
     CONFIG
 )
+from models.experimental.byte_level_copy.custom_embedder.dataset_preparation.dataset_loader import EndByteClassifierDataset
 
-
-INPUT = [
-    "i like machine learning",
-    "anton is running",
-    "finetuning LLMs is as simple as ordering a pint of beer!"
-]
-
-model_cfg: dict = CONFIG["model"]
-device: str = CONFIG["general"]["device"]
-learning_rate: float = CONFIG["trainer"]["optimizer"]["lr"]
-num_epochs = 10  # Example number of epochs
-
-custom_embedder = CustomByteLevelEmbedder(model_cfg, device=device).to(device)
-optimizer = optim.AdamW(custom_embedder.parameters(), lr=learning_rate)
-
-def train_step(input_string: str, target_end_positions: torch.Tensor):
-    # tokenize and get byte embeddings
-    input_tokens = custom_embedder.tokenize_input(input_string)
-    input_tensor = torch.tensor([input_tokens], device=device)  # Add batch dimension
-    #forward pass
-    end_bytes_probs = custom_embedder(input_tensor)
-
+def train_step(
+        optimizer: torch.optim.Optimizer,
+        predictions: torch.Tensor,
+        labels: torch.Tensor) -> float:
     # compute loss and backpropagate
-    loss = compute_loss_for_end_token(end_bytes_probs, target_end_positions)
+    loss = compute_loss_for_end_token(predictions, labels)
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
 
     return loss.item()
 
-# train
-for epoch in range(num_epochs):
-    custom_embedder.train()
-    total_loss = 0.0
-    for input_string in INPUT:  # sample data
-        canonical_tokenizer = get_canonical_tokenizer()
-        canonical_tokens_ids = canonical_tokenizer.encode(input_string)
-        canonical_tokens = [
-            canonical_tokenizer.decode_single_token_bytes(token_id)
-            for token_id in canonical_tokens_ids
-        ]
-        end_chars_pos = find_end_characters(canonical_tokens)
-        target_end_positions = torch.tensor([end_chars_pos], device=device, dtype=torch.float)
+if __name__ == "__main__":
+    model_cfg: dict = CONFIG["model"]
+    device: str = CONFIG["general"]["device"]
+    learning_rate: float = CONFIG["trainer"]["optimizer"]["lr"]
+    num_epochs = 5  # Example number of epochs
 
-        # Train step
-        loss = train_step(input_string, target_end_positions)
-        total_loss += loss
+    embedder = CustomByteLevelEmbedder(model_cfg, device=device).to(device)
+    optimizer = optim.AdamW(embedder.parameters(), lr=learning_rate)
 
-    print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {total_loss / len(INPUT):.4f}")
+    # 0. prepare dataset if not done
+    # tokenizer = get_canonical_tokenizer()
+    # prepare_data(CONFIG, embedder, tokenizer)
+
+    x_train = Path("/media/pints/Data/SuperTinyLanguageModels/data/simple_en_wiki/embedder_preprocessor/bpe-259-0/train_ids.bin")
+    y_train = Path("/media/pints/Data/SuperTinyLanguageModels/data/simple_en_wiki/embedder_preprocessor/bpe-259-0/train_labels.bin")
+    x_val = Path("/media/pints/Data/SuperTinyLanguageModels/data/simple_en_wiki/embedder_preprocessor/bpe-259-0/val_ids.bin")
+    y_val = Path("/media/pints/Data/SuperTinyLanguageModels/data/simple_en_wiki/embedder_preprocessor/bpe-259-0/val_labels.bin")
+
+    train_dataset = EndByteClassifierDataset(x_train, y_train, CONFIG)
+    test_dataset = EndByteClassifierDataset(x_val, y_val, CONFIG)
+
+    # MUST NOT SHUFFLE! due to the way we concatenate during tokenization
+    train_data_loader = DataLoader(train_dataset, batch_size=8, shuffle=False)
+    test_data_loader = DataLoader(test_dataset, batch_size=8, shuffle=False)
+
+    for epoch in range(num_epochs):
+        embedder.train()
+        total_loss = 0.0
+        num_train_samples = 0
+        for x, y in train_data_loader:
+            pred = embedder(x)
+            loss = train_step(optimizer, pred, y) # Train step
+            batch_size = x.size(0)
+            total_loss += loss * batch_size
+            num_train_samples += batch_size
+        avg_loss = total_loss / num_train_samples
+        print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {avg_loss:.4f}")
+
+    # Test loop (evaluation)
+    embedder.eval()
+    test_loss = 0.0
+    num_test_samples = 0
+    with torch.no_grad():
+        for x, y in test_data_loader:
+            pred = embedder(x)
+            loss = compute_loss_for_end_token(pred, y)
+            batch_size = x.size(0)
+            test_loss += loss * batch_size
+            num_test_samples += batch_size
+    
+    avg_test_loss = test_loss / num_test_samples
+    print(f"Final Test Loss: {avg_test_loss:.4f}")
+
+
+    # save the embedder model
+    model_save_path = Path("./embedder_model_weights.pth")
+    torch.save(embedder.state_dict(), model_save_path)
+    print(f"Model weights saved to {model_save_path}")

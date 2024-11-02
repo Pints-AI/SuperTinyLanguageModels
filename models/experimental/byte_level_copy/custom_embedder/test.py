@@ -9,6 +9,9 @@ if __name__ == "__main__":
     # print(dataset)
     # print(type(dataset['train']))
     # print(len(dataset['train']['id']))
-    embedder = CustomByteLevelEmbedder(CONFIG['model'], CONFIG['general']['device'])
-    tokenizer = get_canonical_tokenizer()
-    prepare_data(CONFIG, embedder, tokenizer)
+    # embedder = CustomByteLevelEmbedder(CONFIG['model'], CONFIG['general']['device'])
+    # tokenizer = get_canonical_tokenizer()
+    # prepare_data(CONFIG, embedder, tokenizer)
+
+    # import torch
+    # print("CUDA available:", torch.cuda.is_available()) 
