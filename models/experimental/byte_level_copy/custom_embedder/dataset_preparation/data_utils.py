@@ -166,7 +166,7 @@ def load_data(dataset_names, shuffle=True):
 
 def get_preprocessed_data_path(cfg):
     """ TODO """
-    dataset_names = cfg["trainer"]["dataset_names"]
+    dataset_names = cfg["trainer"]["dataset"]
 
     # Ensure dataset_names is a list
     if isinstance(dataset_names, str):

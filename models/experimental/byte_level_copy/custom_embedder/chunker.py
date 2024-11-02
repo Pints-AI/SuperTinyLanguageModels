@@ -65,8 +65,9 @@ CONFIG = {
         "positional_encoding_type": "rope"
     },
     "trainer": {
+        "preprocessor_name": "embedder_preprocessor",
         "trainer_type": "base_trainer",
-        "dataset": "fineweb_edu_10B",
+        "dataset": "simple_en_wiki",
         "batch_size": 12,
         "gradient_accumulation_steps": 4,
         "max_iters": 10000,
@@ -298,10 +299,12 @@ def start(cfg):
     for input_string in user_input:
         input_bytes_tokens = custom_embedder.tokenize_input(input_string)
         batch_input_bytes_tokens.append(input_bytes_tokens)
+        print(len(input_bytes_tokens))
 
     end_bytes_probs = custom_embedder(torch.tensor(batch_input_bytes_tokens))
     print("Using Custom Embedder:")
     print("="*80)
+    print(f"Input bytes tokens: {input_bytes_tokens}")
     print(f"Output: {end_bytes_probs}")
     print("="*80)
 
@@ -325,6 +328,7 @@ def start(cfg):
     for canonical_tokens, end_chars_pos in zip(batch_canonical_tokens, batch_end_chars_pos):
         print(canonical_tokens)
         print(end_chars_pos)
+        print(len(end_chars_pos))
     print("="*80)
     print(f"Loss value: {compute_loss_for_end_token(torch.tensor(batch_end_chars_pos), end_bytes_probs)}")
 

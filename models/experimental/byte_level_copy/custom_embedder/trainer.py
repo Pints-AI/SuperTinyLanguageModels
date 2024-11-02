@@ -5,7 +5,8 @@ from models.experimental.byte_level_copy.custom_embedder.chunker import (
     CustomByteLevelEmbedder, 
     compute_loss_for_end_token, 
     find_end_characters, 
-    get_canonical_tokenizer
+    get_canonical_tokenizer,
+    CONFIG
 )
 
 
@@ -14,94 +15,6 @@ INPUT = [
     "anton is running",
     "finetuning LLMs is as simple as ordering a pint of beer!"
 ]
-
-# This config is from byte_autoencoder_3.yaml. Copy-pasted for now.
-CONFIG = {
-    "model": {
-        "core_model_type": "pass_through",
-        "hidden_dim": 384,
-        "byte_hidden": 96,
-        "max_chunk_length": 12,
-        "max_num_chunks": 1024,
-        "num_delimiter_layers": 3,
-        "num_byte_decoder_layers": 5,
-        "target_chunk_len": 8.0,
-        "chunk_len_loss_weight": 0.5,
-        "chunk_len_penalty": 0.1,
-        "context_window": 8192,
-        "embedding_model_type": "byte_level",
-        "tokenizer_type": "bpe",
-        "tokenizer_dataset_name": "simple_en_wiki",
-        "tokenizer_simplify_data": True,
-        "vocab_size": 259,
-        "lm_head_type": "byte_level",
-        "lm_head_normalization": "rms_norm",
-        "lm_head_bias": False,
-        "lm_head_dropout": 0.0,
-        "model_shell_type": "byte_autoencoder_shell",
-        "embedding_weight_tying": True,
-        "ffn_weight_tying": False,
-        "cproj_weight_tying": False,
-        "positional_encoding_type": "rope"
-    },
-    "trainer": {
-        "trainer_type": "base_trainer",
-        "dataset": "fineweb_edu_10B",
-        "batch_size": 12,
-        "gradient_accumulation_steps": 4,
-        "max_iters": 10000,
-        "eval_interval": 50000000,
-        "log_interval": 1,
-        "checkpoint_interval": 1000,
-        "eval_iters": 1000,
-        "run_eval": False,
-        "eval": {
-            "mcq_benchmarks": None,
-            "mcq_num_samples": 1000,
-            "eval_byte_metrics": False,
-            "text_modeling_eval": False,
-            "text_generation_eval": False
-        },
-        "optimizer": {
-            "optimizer_name": "adamW",
-            "lr": 5.0e-4,
-            "min_lr": 5.0e-5,
-            "weight_decay": 0.01,
-            "beta1": 0.9,
-            "beta2": 0.95,
-            "grad_clip": 1.0
-        },
-        "lr_scheduler": {
-            "name": "cosine",
-            "warmup_iters": 100
-        },
-        "dataloader": {
-            "name": "autoencoder"
-        },
-        "datasampling": {
-            "name": "standard"
-        },
-        "loss_fn": {
-            "name": "pass_through"
-        }
-    },
-    "general": {
-        "logging": {
-            "wandb_log": True,
-            "wandb_project": "SuperTinyLanguageModels",
-            "wandb_run_name": "Null",
-            "group_name": "experimental_byte_level"
-        },
-        "paths": {
-            "output_dir": "outputs",
-            "data_dir": "data",
-            "checkpoint_dir": "checkpoints",
-            "eval_dir": "evals"
-        },
-        "seed": 489,
-        "device": "cpu"
-    }
-}
 
 model_cfg: dict = CONFIG["model"]
 device: str = CONFIG["general"]["device"]
