@@ -154,7 +154,7 @@ def prepare_data(
 
     try:
         # Determine the number of processors to use
-        max_procs = min(os.cpu_count(), cfg["general"].get("max_num_cores", 12))
+        max_procs = min(os.cpu_count(), cfg["general"].get("max_num_cores", 16))
         print(f"Using {max_procs} processes for tokenization.")
 
         # Tokenize the dataset

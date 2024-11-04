@@ -51,7 +51,7 @@ CONFIG = {
         "context_window": 8192,
         "embedding_model_type": "byte_level",
         "tokenizer_type": "bpe",
-        "tokenizer_dataset_name": "simple_en_wiki",
+        "tokenizer_dataset_name": "en_wiki",
         "tokenizer_simplify_data": True,
         "vocab_size": 259,
         "lm_head_type": "byte_level",
@@ -67,7 +67,7 @@ CONFIG = {
     "trainer": {
         "preprocessor_name": "embedder_preprocessor",
         "trainer_type": "base_trainer",
-        "dataset": "simple_en_wiki",
+        "dataset": "en_wiki",
         "batch_size": 12,
         "gradient_accumulation_steps": 4,
         "max_iters": 10000,
@@ -114,17 +114,17 @@ CONFIG = {
             "group_name": "experimental_byte_level"
         },
         "paths": {
-            "output_dir": "/media/pints/Data/SuperTinyLanguageModels/outputs",
-            "data_dir":  "/media/pints/Data/SuperTinyLanguageModels/data",
-            "checkpoint_dir": "/media/pints/Data/SuperTinyLanguageModels/checkpoints",
-            "eval_dir": "/media/pints/Data/SuperTinyLanguageModels/evals"
+            "output_dir": "/home/pints/brewery/SuperTinyLanguageModels/outputs",
+            "data_dir":  "/home/pints/brewery/SuperTinyLanguageModels/data",
+            "checkpoint_dir": "/home/pints/brewery/SuperTinyLanguageModels/checkpoints",
+            "eval_dir": "/home/pints/brewery/SuperTinyLanguageModels/evals"
         },
         "seed": 489,
         "device": "cpu"
     }
 }
 
-def compute_loss_for_end_token(
+def compute_MSEloss_for_end_token(
     predictions: torch.Tensor,
     targets: torch.Tensor
 ) -> torch.Tensor:
@@ -141,12 +141,29 @@ def compute_loss_for_end_token(
     return mse_loss_per_batch.mean()
 
 
+def compute_BCEloss_for_end_token(
+    predictions: torch.Tensor,
+    targets: torch.Tensor
+) -> torch.Tensor:
+    assert predictions.shape == targets.shape, (
+        "Something went wrong when computing loss! "
+        "<predictions> and <targets> should have the same shape."
+    )
+    
+    # element-wise BCE across `dim`, without reducing over batch dimension
+    bce_loss = F.binary_cross_entropy(predictions, targets, reduction='none')
+    # mean over embedding dim
+    bce_loss_per_batch = bce_loss.mean(dim=1)
+    # mean over batch dim
+    return bce_loss_per_batch.mean()
+
+
 def initialize_byte_tokenizer():
     return build_tokenizer(
         tokenizer_type="bpe",
         vocab_size=259,
         simplify=False,
-        dataset_name="simple_en_wiki",
+        dataset_name=CONFIG['model']['tokenizer_dataset_name'],
     )
 
 def conversion_to_bytes(
@@ -180,7 +197,7 @@ class CustomByteLevelEmbedder(EmbedderInterface):
             tokenizer_type="bpe",
             vocab_size=model_cfg["vocab_size"],
             simplify=False,
-            dataset_name="simple_en_wiki",
+            dataset_name=CONFIG['model']['tokenizer_dataset_name'],
         )
 
         self.byte_embedder = torch.nn.Embedding(
@@ -239,7 +256,7 @@ class EndByteClassifier(torch.nn.Module):
             [
                 GenericTransformerBlock(
                     hidden_dim=self.byte_hidden,
-                    context_window=2048, #5 * 2048,
+                    context_window=CONFIG['model']['context_window'], # CHECK WITH LEON
                     ffn_cfg={
                         "ffn_type": "generic",
                         "ffn_dim": 4 * self.byte_hidden,
