@@ -24,10 +24,10 @@ model:
 
   embedding_model_type: generic
   tokenizer_type: bpe
-  tokenizer_dataset_names: [en_wiki, MATH]
-  tokenizer_simplify_data: true
-  tokenizer_num_reserved_tokens: 20
-  vocab_size: 9984
+  tokenizer_dataset_names: [simple_en_wiki]
+  tokenizer_simplify_data: False
+  tokenizer_num_reserved_tokens: 0
+  vocab_size: 10000000
 
   hidden_dim: 384
   context_window: 2048

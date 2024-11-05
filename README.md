@@ -2,11 +2,11 @@
 ## TODO
 
 - add versions to the requirements file (torch can't be too low, throws error for multi-gpu)
-
+- fix truthfulqa eval
 - fix reformer attention
 - fix sparse attention
 - for all attentions check attn_mask is handeled correctly
-
+- try compiling before training
 - fix import structure for experimental models
 
 - create detailed docs for optimizers and scheduler

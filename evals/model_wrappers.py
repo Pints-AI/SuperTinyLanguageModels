@@ -28,12 +28,12 @@ class LoglikelihoodMCQModelWrapper(BaseModelWrapper):
         """ Compute the loglikelihood of given inputs """
         results = []
         with torch.no_grad():
-            with torch.autocast(device_type=self.device, dtype=torch.bfloat16):
-                for prefix_batch, cont_batch in zip(
-                    batch(prefixes, 32), batch(continuations, 32) # TODO (legacy) should not be hardcoded
-                ):
-                    ll = self.model.loglikelihood(prefix_batch, cont_batch)
-                    results.extend(ll.cpu().numpy())
+            #with torch.autocast(device_type=self.device, dtype=torch.bfloat16):
+            for prefix_batch, cont_batch in zip(
+                batch(prefixes, 32), batch(continuations, 32) # TODO (legacy) should not be hardcoded
+            ):
+                ll = self.model.loglikelihood(prefix_batch, cont_batch)
+                results.extend(ll.cpu().numpy())
         return results
 
 

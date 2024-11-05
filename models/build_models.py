@@ -27,7 +27,13 @@ from models.experimental.moe_weight_sharing import (
     SharedMoE
 )
 
+from models.experimental import (
+    EXPERIMENTAL_EMBEDDING_MODEL_DICT,
+    EXPERIMENTAL_CORE_MODEL_DICT,
+    EXPERIMENTAL_MODEL_HEAD_DICT,
+    EXPERIMENTAL_MODEL_SHELL_DICT,
 
+)
 
 
 def build_model(model_cfg=None, checkpoint_path=None, device="cuda", **kwargs):
@@ -90,19 +96,18 @@ def build_embedding_model(model_cfg):
     Returns:
         embedding_model: embedding_model_instance
     """
-    return EMBEDDING_MODEL_DICT[model_cfg["embedding_model_type"]](
-        model_cfg=model_cfg
-    )
+    embedding_model_type = model_cfg["embedding_model_type"]
+    if embedding_model_type in EMBEDDING_MODEL_DICT:
+        return EMBEDDING_MODEL_DICT[embedding_model_type](model_cfg=model_cfg)
+    elif embedding_model_type in EXPERIMENTAL_EMBEDDING_MODEL_DICT:
+        return EXPERIMENTAL_EMBEDDING_MODEL_DICT[embedding_model_type](model_cfg=model_cfg)
+    else:
+        raise ValueError(f"Embedding model {embedding_model_type} not found.")
 
 
 CORE_MODEL_DICT = {
     "generic": GenericTransformer,
     "hf_core": HFTransformerCore,
-
-    # experimental
-    "ffn_lora_sharing": SharedInteriorFFNLora,
-    "ffn_lora_sharing": SharedInteriorFFNLoraAndCProj,
-    "ffn_lora_sharing_moe": SharedMoE,
 }
 
 
@@ -114,9 +119,13 @@ def build_core_model(model_cfg):
     Returns:
         core_model: core_model_instance
     """
-    return CORE_MODEL_DICT[model_cfg["core_model_type"]](
-        model_cfg=model_cfg
-    )
+    core_model_type = model_cfg["core_model"]["core_model_type"]
+    if core_model_type in CORE_MODEL_DICT:
+        return CORE_MODEL_DICT[core_model_type](model_cfg=model_cfg)
+    elif core_model_type in EXPERIMENTAL_CORE_MODEL_DICT:
+        return EXPERIMENTAL_CORE_MODEL_DICT[core_model_type](model_cfg=model_cfg)
+    else:
+        raise ValueError(f"Core model {core_model_type} not found.")
 
 
 MODEL_HEAD_DICT = {
@@ -135,15 +144,23 @@ def build_model_head(model_cfg, embedding_model=None):
     Returns:
         model_head: model_head_instance
     """
-    return MODEL_HEAD_DICT[model_cfg["lm_head_type"]](
-        model_cfg=model_cfg, 
-        embedding_model=embedding_model
-    )
+    model_head_type = model_cfg["lm_head_type"]
+    if model_head_type in MODEL_HEAD_DICT:
+        return MODEL_HEAD_DICT[model_head_type](
+            model_cfg=model_cfg, 
+            embedding_model=embedding_model
+        )
+    elif model_head_type in EXPERIMENTAL_MODEL_HEAD_DICT:
+        return EXPERIMENTAL_MODEL_HEAD_DICT[model_head_type](
+            model_cfg=model_cfg, 
+            #embedding_model=embedding_model
+        )
+    else:
+        raise ValueError(f"Model Head {model_head_type} not found.")
 
 
 MODEL_SHELL_DICT = {
     "standard": ModelShell,
-    "byte_shell": ByteModelShell
 }
 
 
@@ -155,12 +172,25 @@ def build_model_shell(model_cfg, embedding_model, core_model, model_head):
     Returns:
         model_shell: model_shell_instance
     """
-    return MODEL_SHELL_DICT[model_cfg["model_shell_type"]](
-        model_cfg=model_cfg,
-        embedding_model=embedding_model, 
-        core_model=core_model, 
-        model_head=model_head,
-    )
+    model_shell_type = model_cfg["model_shell_type"]
+    if model_shell_type in MODEL_SHELL_DICT:
+        return MODEL_SHELL_DICT[model_shell_type](
+            model_cfg=model_cfg,
+            embedding_model=embedding_model, 
+            core_model=core_model, 
+            model_head=model_head,
+        )
+    elif model_shell_type in EXPERIMENTAL_MODEL_SHELL_DICT:
+        return EXPERIMENTAL_MODEL_SHELL_DICT[model_shell_type](
+            model_cfg=model_cfg,
+            embedding_model=embedding_model, 
+            core_model=core_model, 
+            model_head=model_head,
+        )
+
+    else:
+        raise ValueError(f"Model Shell {model_shell_type} not found.")
+
 
 
 MODEL_WEIGHT_INIT_DICT = {

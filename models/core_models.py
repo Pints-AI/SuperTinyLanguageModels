@@ -64,7 +64,6 @@ class GenericTransformer(torch.nn.Module):
         Returns:
             x: torch.tensor(B, S, H)
         """
-
         # apply dropout
         x = self.transformer.drop(x)
 

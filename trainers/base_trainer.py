@@ -50,7 +50,7 @@ class BaseTrainer:
         if gpu_id is not None: # using ddp
             self.dist = True
             print(gpu_id)
-            self.DDP_model = DDP(self.model, device_ids=[gpu_id])
+            self.DDP_model = DDP(self.model, device_ids=[gpu_id], find_unused_parameters=True)
         else:
             self.dist = False
             self.DDP_model = model
@@ -89,7 +89,7 @@ class BaseTrainer:
         self.use_wandb = cfg["general"]["logging"]["wandb_log"]
         self.checkpoint_dir = cfg["general"]["paths"]["checkpoint_dir"]
         self.batch_size = cfg["trainer"]["batch_size"] 
-        self.evaluate_byte_metrics = self.cfg["trainer"]["eval"].get("eval_byte_metrics", False)
+        self.evaluate_byte_metrics = self.cfg["trainer"].get("eval", {}).get("eval_byte_metrics", False)
 
 
         # print training statistics
@@ -233,7 +233,7 @@ class BaseTrainer:
         # run the model on external eval sets
         benchmark_results = intra_training_evaluation(
             model=self.model,
-            benchmarks=self.cfg["trainer"]["eval"].get("benchmarks", []),
+            benchmarks=self.cfg["trainer"].get("eval", {}).get("benchmarks", []),
         )
 
         # get validation loss
@@ -284,9 +284,10 @@ class BaseTrainer:
             with context_manager:
                 with self.ctx: 
                     output, aux_loss = self.DDP_model(x, attn_mask)
-                    loss = self.loss_fn(output, y)
-                    if aux_loss is not None:
-                        loss += aux_loss
+                    loss = aux_loss #self.loss_fn(output, y)
+                    # if aux_loss is not None:
+                    #     loss += aux_loss
+                    # TODO: actually fix this
 
                 # Scale loss to simulate larger effective batch size
                 loss = loss / self.gradient_accumulation_steps
@@ -339,11 +340,12 @@ class BaseTrainer:
 
 
             # Estimate model performance at intervals
-            if (not iter_num % self.cfg["trainer"]["eval_interval"]):
-                self.estimate_performance(
-                    iter_num=iter_num,
-                    eval_iters=self.cfg["trainer"].get("val_loss_iters", 100) # Default 100
-                )
+            # if (not iter_num % self.cfg["trainer"]["eval_interval"]):
+            #     self.estimate_performance(
+            #         iter_num=iter_num,
+            #         eval_iters=self.cfg["trainer"].get("val_loss_iters", 100) # Default 100
+            #     )
+            # TODO - FIX
 
             
 

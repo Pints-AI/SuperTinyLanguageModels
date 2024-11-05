@@ -64,8 +64,12 @@ def basic_main(cfg):
         checkpoint_path=cfg["model"].get("checkpoint_path", None),
         device=cfg["general"]["device"]
     )
+    # load weights # TODO remove
+    model.embedding_model.delimiter_model._load_model_weights()
     model.to(cfg["general"]["device"])
     model.train()
+    # print model weights
+    # print(model.embedding_model.delimiter_model.end_of_seq_head.weight)
     print("Model built")
     # load the relevant trainer
     trainer = build_trainer(

@@ -24,11 +24,11 @@ def gpt2_weights_init(module):
     # I don't like this
 
 
-def torch_default_init(_):
-    """
-    Initialize model weights according to PyTorch defaults.
-    i.e. do nothing.
-    """
+# def torch_default_init(_):
+#     """
+#     Initialize model weights according to PyTorch defaults.
+#     i.e. do nothing.
+#     """
 
 
 def build_weight_init(weight_init_type):

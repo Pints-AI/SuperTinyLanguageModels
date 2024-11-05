@@ -1,19 +1,55 @@
-mcq_benchmarks:
-  - "winograd"
-  - "hellaswag"
-  - "arc_easy"
-  - "blimp"
-  - "piqa"
-  - "race_middle"
-  - "race_high"
-  - "boolq"
-  - "openbook_qa_closed"
-  - "openbook_qa_open"
-  - "copa"
-  - "commonsense_qa"
+benchmarks:
+  #- Ewok-Subset
+  #- Blimp-Subset
+  #- Teacher-Text-Modeling (full)
+  #- Text-Generation (full)
+  #- STLM-Text-Modeling (full)
+
+  - ArcEasy
+  #- ArcEasy-Subset
+  #- ArcEasy-STLMSubset
+  #- Blimp
+  - Hellaswag
+  #- Hellaswag-Subset
+  #- Hellaswag-STLMSubset
+  - MMLU
+  #- MMLU-Subset
+  - Winogrande
+  #- Winogrande-Subset
+  #- TruthfulQA-M2
+  #- Truthful-M2-Subset
+  #- TruthfulQA-M2-STLMSubset
+  - PIQA
+  #- PIQA-Subset
+  - BoolQ
+  #- BoolQ-Subset
+  #- RACEMiddle
+  #- RACEMiddle-Subset
+  #- RACEHigh
+  #- RACEHigh-Subset
+  #- OpenbookQAOpen
+  #- OpenbookQAOpen-Subset
+  #- OpenbookQAClosed
+  #- OpenbookQAClosed-Subset
+  #- Copa
+  #- Copa-Subset
+  #- CommonsenseQA
+  #- CommonsenseQA-Subset
+  - Ewok
+  #- STLM-Text-Modeling (Science-Easy)
+  #- STLM-Text-Modeling (Science-Medium)
+  #- STLM-Text-Modeling (Science-Hard)
+  #- STLM-Text-Modeling (Science)
+  #- STLM-Text-Modeling (Conversational)
+  #- STLM-Text-Modeling (Ethics)
+  #- STLM-Text-Modeling (Literature)
+  #- STLM-Text-Modeling (Code)
+  - MATH
+  #- MATH-Subset
+  - GSM8K
+  #- GSM8k-Subset
   
-  
-model_ckpt: "checkpoints/..."
+model_ckpt: "checkpoints/100k_run/ckpt_100000.pt"
 generate_config:
   temperature: 0.8
   top_k: 10

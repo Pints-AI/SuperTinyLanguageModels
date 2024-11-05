@@ -11,6 +11,8 @@ from models.components.normalization import build_normalization
 
 from models.components.activations import build_activation
 
+from typing import Optional
+
 
 class MoELoRA(torch.nn.Module):
     def __init__(
@@ -174,29 +176,30 @@ class SharedTransformerBlock(torch.nn.Module):
     """
     LoRA shared transformer block
     """
-    def __init__(self, hidden_dim, context_window, use_rope, ffn_cfg, attn_cfg):
+    def __init__(self, hidden_dim, context_window, ffn_cfg, attn_cfg, depth: Optional[int]=None):
         super().__init__()
 
         # build the attn norm
         self.attn_norm = build_normalization(
-            normalization_name=attn_cfg["normalization"],
+            normalization_name=attn_cfg.get("normalization", "none"),
             dim=hidden_dim,
-            bias=attn_cfg["bias"],
+            bias=attn_cfg["params"]["bias"],
         )
 
         # build the attention
         self.attn = build_attention(
+            attn_name=attn_cfg["name"],
+            attn_params=attn_cfg["params"],
             hidden_dim=hidden_dim,
             context_window=context_window,
-            use_rope=use_rope,
-            attn_cfg=attn_cfg,
+            depth=depth,
         )
 
         # build the ffn norm
         self.ffn_norm = build_normalization(
-            normalization_name=ffn_cfg["normalization"],
+            normalization_name=ffn_cfg.get("normalization", "none"), # Default: none
             dim=hidden_dim,
-            bias=ffn_cfg["bias"],
+            bias=ffn_cfg["params"]["bias"],
         )
 
         # build the ffn block

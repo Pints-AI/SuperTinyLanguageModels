@@ -11,216 +11,331 @@ from models.components.tokenizers import build_tokenizer
 from models.embedding_models import EmbedderInterface
 from models.experimental.byte_level.layers import ByteLevelTransformerBlock
 
+from models.components.transformer_blocks import GenericTransformerBlock
+from copy import deepcopy
 
-class ByteLevelEmbedder(EmbedderInterface):
-    """
-    Takes byte level encodings, processes them via
-    two local-attention transformer blocks and pools
-    the resultant tokens based on gpt-2 tokenizer
-    boundaries.
-    Inputs are batches of lists of token blocks
-    in the gpt2 tokenizer boundaries.
-    """
 
-    # pylint: disable=super-init-not-called
+
+# TODO
+# - Different eot tokens for chunks and text 
+# 
+
+
+
+# 1. delimitation (byte, idx -> reshaped byte idx and target ids)
+# 2. Byte embedder (reshaped byte idx -> global token embeddings)
+class DelimiterModel(torch.nn.Module):
+    """ TODO """
     def __init__(self, model_cfg):
         super().__init__()
-        self.model_cfg = model_cfg
 
-        # build the tokenizers
-        self.byte_tokenizer = build_tokenizer(
-            tokenizer_type=model_cfg["embedder"]["byte_tokenizer_type"],
-            vocab_size=model_cfg["byte_vocab_size"],
-            dataset_name=model_cfg["embedder"]["dataset_name"],
-        )
-        self.pooling_tokenizer = build_tokenizer(
-            tokenizer_type=model_cfg["embedder"]["tokenizer_type"],
-            vocab_size=model_cfg["vocab_size"],
-            dataset_name=model_cfg["embedder"]["dataset_name"],
+        self.byte_embedder = torch.nn.Embedding(
+            num_embeddings=model_cfg["vocab_size"],
+            embedding_dim=model_cfg["byte_hidden_dim"],
         )
 
-        # positional encodings
-        self.pos_encoder = LearnedPosEncoding(
-            hidden_dim=model_cfg["byte_embedding_dim"],
-            context_window=model_cfg["byte_context_window"],
+        self.transformer = torch.nn.ModuleList(
+            [
+                GenericTransformerBlock(
+                    hidden_dim=model_cfg["byte_hidden_dim"],
+                    context_window=model_cfg["context_window"],
+                    ffn_cfg=model_cfg["delimiter_model"]["ffn"],
+                    attn_cfg=model_cfg["delimiter_model"]["attn"],
+                    depth=i
+                )
+                for i in range(model_cfg["delimiter_model"]["num_layers"])
+            ]
         )
 
-        # build the token embeddings
-        self.byte_token_embedder = torch.nn.Embedding(
-            num_embeddings=model_cfg["byte_vocab_size"],
-            embedding_dim=model_cfg["byte_embedding_dim"],
+        self.end_of_seq_head = torch.nn.Linear(
+            model_cfg["byte_hidden_dim"],
+            1, # prob of sequence ending
         )
+        self.device = "cuda" #model_cfg['general']['device']
+        # self._load_model_weights()
+
+
+    def _load_model_weights(self):
+        """ TODO """
+        path = "../../../checkpoints/embedder_model_weights_wiki_en.pth"
+
+        # load weight dict
+        weight_dict = torch.load(path)
+        weights = {k.replace("module.", ""): v for k, v in weight_dict.items()}
+
+        transformer_weight_dict = {}
+        embedder_weight_dict = {}
+        head_dict = {}
+        for weight_key, weight in weights.items():
+            if "transformer" in weight_key:
+                transformer_weight_dict[weight_key.replace("delimiter_model.", "").replace("transformer.", "")] = weight 
+            elif "byte_embedder" in weight_key:
+                embedder_weight_dict[weight_key.replace("byte_embedder.", "")] = weight
+            elif "end_of_seq_head" in weight_key:
+                head_dict[weight_key.replace("delimiter_model.", "").replace("end_of_seq_head.", "")] = weight
+
+        # load both
+        self.transformer.load_state_dict(transformer_weight_dict, strict=False)
+        self.transformer.to(self.device)
+        self.byte_embedder.load_state_dict(embedder_weight_dict)
+        self.byte_embedder.to(self.device)
+        self.end_of_seq_head.load_state_dict(head_dict)
+        self.end_of_seq_head.to(self.device)
+
+        # print("original", self.end_of_seq_head.weight)
+
+        # Freeze all weights
+        for param in self.transformer.parameters():
+            param.requires_grad = False 
+        for param in self.byte_embedder.parameters():
+            param.requires_grad = False 
+        for param in self.end_of_seq_head.parameters():
+            param.requires_grad = False 
+
+
+
+    def forward(self, x):
+        # pass throug embedder 
+        x = self.byte_embedder(x)
+        # Pass through transformer blocks 
+        for block in self.transformer:
+            x = block(x)
+
+        # Predict delimitations
+        logits = self.end_of_seq_head(x).squeeze(-1) # Shape: (batch, seq_len)
+
+        # Apply sigmoid 
+        probs = torch.sigmoid(logits)
+
+        return probs
+        
+
+
+class ByteBidirectionEncoding(torch.nn.Module):
+    """ TODO """
+    def __init__(self, model_cfg):
+        super().__init__()
 
         # build the transformer blocks
         self.transformer = torch.nn.ModuleList(
             [
                 ByteLevelTransformerBlock(
-                    input_dim=model_cfg["byte_embedding_dim"],
-                    output_dim=model_cfg["byte_embedding_dim"] * 2,
-                    ffn_dim=model_cfg["byte_embedding_dim"] * 4,
-                    context_window=model_cfg["byte_context_window"],
-                    use_rope=False,
+                    input_dim=model_cfg["byte_hidden_dim"],
+                    output_dim=model_cfg["byte_hidden_dim"],
+                    ffn_dim=model_cfg["byte_hidden_dim"]*4,
+                    context_window=model_cfg["max_chunk_length"],
+                    attn_cfg=model_cfg["chunk_encoding_attn_dict"]
                 ),
                 ByteLevelTransformerBlock(
-                    input_dim=model_cfg["byte_embedding_dim"]*2,
-                    output_dim=model_cfg["byte_embedding_dim"] * 2,
-                    ffn_dim=model_cfg["byte_embedding_dim"] * 8,
-                    context_window=model_cfg["byte_context_window"],
-                    use_rope=False,
+                    input_dim=model_cfg["byte_hidden_dim"],
+                    output_dim=model_cfg["byte_hidden_dim"],
+                    ffn_dim=model_cfg["byte_hidden_dim"]*4,
+                    context_window=model_cfg["max_chunk_length"],
+                    attn_cfg=model_cfg["chunk_encoding_attn_dict"]
                 ),
                 ByteLevelTransformerBlock(
-                    input_dim=model_cfg["byte_embedding_dim"]*2,
-                    output_dim=model_cfg["byte_embedding_dim"] * 2,
-                    ffn_dim=model_cfg["byte_embedding_dim"] * 8,
-                    context_window=model_cfg["byte_context_window"],
-                    use_rope=False,
+                    input_dim=model_cfg["byte_hidden_dim"],
+                    output_dim=model_cfg["byte_hidden_dim"]*4,
+                    ffn_dim=model_cfg["byte_hidden_dim"]*8,
+                    context_window=model_cfg["max_chunk_length"],
+                    attn_cfg=model_cfg["chunk_encoding_attn_dict"]
                 ),
                 ByteLevelTransformerBlock(
-                    input_dim=model_cfg["byte_embedding_dim"] * 2,
+                    input_dim=model_cfg["byte_hidden_dim"]*4,
+                    output_dim=model_cfg["byte_hidden_dim"]*4,
+                    ffn_dim=model_cfg["byte_hidden_dim"]*16,
+                    context_window=model_cfg["max_chunk_length"],
+                    attn_cfg=model_cfg["chunk_encoding_attn_dict"]
+                ),
+                ByteLevelTransformerBlock(
+                    input_dim=model_cfg["byte_hidden_dim"]*4,
+                    output_dim=model_cfg["byte_hidden_dim"]*4,
+                    ffn_dim=model_cfg["byte_hidden_dim"]*16,
+                    context_window=model_cfg["max_chunk_length"],
+                    attn_cfg=model_cfg["chunk_encoding_attn_dict"]
+                ),
+                ByteLevelTransformerBlock(
+                    input_dim=model_cfg["byte_hidden_dim"]*4,
                     output_dim=model_cfg["hidden_dim"],
-                    ffn_dim=model_cfg["byte_embedding_dim"] * 8,
-                    context_window=model_cfg["byte_context_window"],
-                    use_rope=False,
+                    ffn_dim=model_cfg["byte_hidden_dim"]*16,
+                    context_window=model_cfg["max_chunk_length"],
+                    attn_cfg=model_cfg["chunk_encoding_attn_dict"]
                 ),
             ]
         )
 
-    def tokenize_input(self, input_string: str, truncate=False, add_eot=True):
-        """Tokenize an input string.
 
-        In this case we actually want to pre-tokenize using the pooling tokenizer,
-        the byte tokenizer is then used in the forward pass. Its a bit complicated...
-        """
-        pooling_ids = self.pooling_tokenizer.encode(input_string)
-        if add_eot:
-            pooling_ids += [self.pooling_tokenizer.eot_token]
-        if truncate:
-            pooling_ids = self.truncate([pooling_ids])[0]
-        tokens = [
-            self.byte_tokenizer.encode(self.pooling_tokenizer.decode([pool_id]))
-            for pool_id in pooling_ids
-        ]
-        # truncate bytes
-        tokens = [
-            token_seq[: self.model_cfg["byte_context_window"]] for token_seq in tokens
-        ]
-        # pad bytes
-        tokens = [
-            token_seq
-            + [self.byte_tokenizer.pad_token]
-            * (self.model_cfg["byte_context_window"] - len(token_seq))
-            for token_seq in tokens
-        ]
-        return tokens
+    def forward(self, x):
+        # B, Num_chunck, Chunck_len, 128 
+        B, C_num, C_len, h_b = x.size()
+        # flatten first two dims 
+        x = x.view(B*C_num, C_len, h_b)
 
-    def pad_batch(self, token_lists, direction="right"):
-        """
-        Pad the batch of token lists into a tensor
-        Args:
-            token_lists: list of lists of tokens
-            direction: "right" or "left" - whether to add
-                padding to the right or left of the tokens
-        Returns:
-            padded_token_lists: torch.tensor(B, S, S_c)
-            mask: torch.tensor(B, S, S_c)
-        """
-        max_len = max([len(token_list) for token_list in token_lists])
-        padded_token_lists = []
-        mask = []
-        byte_context_window = self.model_cfg["byte_context_window"]
-        for token_list in token_lists:
-            if direction == "right":
-                padded_token_list = token_list + [
-                    [self.byte_tokenizer.pad_token]
-                    * byte_context_window
-                ] * (max_len - len(token_list))
-                padded_token_lists.append(padded_token_list)
-                mask.append(
-                    [1] * len(token_list)
-                    + [0] * (max_len - len(token_list))
-                )
-            else:
-                padded_token_list = token_list + [
-                    [self.byte_tokenizer.pad_token]
-                    * byte_context_window
-                ] * (max_len - len(token_list))
-                padded_token_lists.append(padded_token_list)
-                mask.append(
-                    [0] * (max_len - len(token_list))
-                    + [1] * len(token_list)
-                )
-            # expand the mask to include the byte context window
-            mask[-1] = [[it] * byte_context_window for it in mask[-1]]
-        return torch.tensor(padded_token_lists), torch.tensor(mask)
-
-    def truncate(self, token_lists):
-        # get model max length
-        max_length = self.model_cfg["context_window"]
-        return [token_seq[-max_length:] for token_seq in token_lists]
-
-    def decode(self, list_of_token_idss):
-        """
-        Decode the token ids.
-        """
-        return_strings = []
-        for list_of_token_ids in list_of_token_idss:
-            return_string = ""
-            for token_ids in list_of_token_ids:
-                token_ids = [
-                    token_id
-                    for token_id in token_ids
-                    if token_id != self.byte_tokenizer.pad_token
-                ]
-                return_string += self.byte_tokenizer.decode(token_ids)
-            return_strings.append(return_string)
-        return return_strings
-
-    def forward(self, token_ids):
-        """
-        Forward pass.
-        """
-        # get the byte embeddings
-        x = self.byte_token_embedder(token_ids)
-
-        # collapse the text sequence and batch dim
-        B, S, S_c, H_c = x.size()
-        x = x.view(B * S, S_c, H_c)
-
-        # positional encoding
-        x = self.pos_encoder(x)
-
-        # pass through transformer
+        # pass through blocks
         for block in self.transformer:
             x = block(x)
 
-        # un-collapse the text sequence and batch dim
-        # mean pool the tokens
-        x = x.mean(dim=-2)
-        x = x.view(B, S, -1)
+        x = x.mean(-2) # TODO: should ignore the pad tokens
+        # reshape it back to 3
+        x = x.view(B, C_num, -1)  # batch, chunk_num, 512
 
-        return x
+        return x 
 
-    def get_sequence_info(self, x):
-        """
-        Given a batch of sequences of tokens, return
-        the token lengths and total number of bytes per
-        sequence.
-        Args:
-            x: torch.tensor(B, S, S_c)
-        """
-        # flatten along S, S_c
-        B, S, S_c = x.size()
-        x = x.view(B, S * S_c)
 
-        sequence_char_lengths = []
-        # then we decode everything
-        # batch decode
-        sequences = self.byte_tokenizer.decode_batch(x)
-        for seq in sequences:
-            sequence_char_lengths.append(len(seq))
+class ByteLevelEmbedder(EmbedderInterface):
+    """ TODO """
+    def __init__(self, model_cfg):
+        super().__init__()
+        self.max_chunk_length = model_cfg["max_chunk_length"]
 
-        # obtain the mask for end-of-word and pad tokens
-        mask = x != self.byte_tokenizer.pad_token
-        mask = mask & (x != self.byte_tokenizer.eot_token)
+        # Initialize the byte tokenizer
+        self.byte_tokenizer = build_tokenizer(
+            tokenizer_type="byte",
+            vocab_size=model_cfg["vocab_size"],
+            simplify=False,
+            dataset_names=None,
+            num_reserved_tokens=0,
+        )
+        
 
-        return sequence_char_lengths, mask
+        # Initialize the byte embedding 
+        self.byte_embedder = torch.nn.Embedding(
+            num_embeddings=model_cfg["vocab_size"],
+            embedding_dim=model_cfg["byte_hidden_dim"],
+        )
+
+        self.pad_token = self.byte_tokenizer.pad_token
+        self.eot_token = self.byte_tokenizer.eot_token
+        # eot_token_embedding = self.byte_embedder(torch.tensor([self.eot_token], device="cuda"))[0]
+        # pad_token_embedding = self.byte_embedder(torch.tensor([self.pad_token], device="cuda"))[0]
+
+        # self.register_buffer("eot_token_embedding", eot_token_embedding)
+        # self.register_buffer("pad_token_embedding", pad_token_embedding)
+        # Initialize the delimiter model
+        self.delimiter_model = DelimiterModel(model_cfg=model_cfg)
+        # print("Delimeter:", self.delimiter_model.end_of_seq_head.weight)
+
+        # Initialize the bidirectional embedding model
+        self.chunk_encoding_model = ByteBidirectionEncoding(
+            model_cfg=model_cfg
+        )
+
+
+    def _reshape_sequence(self, x_embedded, x_ids, delimitation_probs):
+        """ TODO """
+        # turn probs into mask
+        end_of_chunk = delimitation_probs > 0.5
+
+        batch_size, seq_len = end_of_chunk.size()
+        device = x_embedded.device
+
+        chunk_indices = []
+        avg_chunk_len = []
+        max_observed_chunk_len = 0
+        for batch in range(batch_size):
+            # Get predicted end positions
+            ends = torch.nonzero(end_of_chunk[batch], as_tuple=False).squeeze(-1)
+
+            # If no ends detected, set to the last token
+            if ends.numel() == 0:
+                ends = torch.tensor([seq_len-1], device=device)
+            else:
+                ends = ends + 1 # Adjust to point after the chunk end
+
+            # Initialize starts
+            starts = torch.cat([torch.tensor([0], device=device), ends[:-1]])
+
+            chunk_lengths = ends-starts
+            max_observed_chunk_len = max(max_observed_chunk_len, chunk_lengths.max())
+            chunk_indices.append((starts, ends))
+            avg_chunk_len.append(chunk_lengths.float().mean())
+
+
+        # Find the max num chunks and max chunk length from the chunked data
+        max_num_chunks = torch.sum(end_of_chunk, dim=-1).max()
+        max_chunk_length = self.max_chunk_length + 1#min(max_observed_chunk_len, self.max_chunk_length) + 1
+        # Initialize output tensors by repeating pad_token_vector
+        # output_tensor = self.pad_token_embedding.repeat(
+        #     batch_size, 
+        #     max_num_chunks, 
+        #     max_chunk_length, 
+        #     1
+        # )
+
+        output_tensor = self.byte_embedder(torch.tensor([self.pad_token], device="cuda"))[0].repeat(
+            batch_size, 
+            max_num_chunks, 
+            max_chunk_length, 
+            1
+        )
+
+
+        # Initialize output_token_ids with pad_token_id
+        output_token_ids = torch.full(
+            (batch_size, max_num_chunks, max_chunk_length),
+            self.byte_tokenizer.pad_token,
+            device=device,
+            dtype=torch.long,
+        )
+
+        # Populate output_tensor and output_token_ids with actual chunk data 
+        for batch in range(batch_size):
+            starts, ends = chunk_indices[batch]
+            num_chunks = min(len(ends), max_num_chunks)
+            for i in range(num_chunks):
+                chunk = x_embedded[batch, starts[i]:ends[i], :]
+                chunk_ids = x_ids[batch, starts[i]:ends[i]]
+                chunk_len = chunk.size(0)
+
+                if chunk_len >= max_chunk_length:
+                    chunk = chunk[:max_chunk_length-1]
+                    chunk_ids = chunk_ids[:max_chunk_length-1]
+                    chunk_len = chunk.size(0) # max_chunk_length
+
+
+                output_tensor[batch, i, :chunk_len, :] = chunk 
+                # add end token
+                output_tensor[batch, i, chunk_len, :] = self.byte_embedder(torch.tensor([self.eot_token], device="cuda"))[0] #self.eot_token_embedding
+
+                # add output ids
+                output_token_ids[batch, i, :chunk_len] = chunk_ids 
+                # add end token
+                output_token_ids[batch, i, chunk_len] = self.eot_token
+
+        return output_tensor, output_token_ids, sum(avg_chunk_len)/len(avg_chunk_len)
+
+
+
+    def forward(self, x):
+        # delimit the sequence
+        delimitation_probs = self.delimiter_model(x)
+
+        # embed x
+        x_embedded = self.byte_embedder(x)
+
+        # reshape based on delimitations
+        x_reshaped, x_ids, avg_chunk_len = self._reshape_sequence(
+            x_embedded=x_embedded,
+            x_ids=x,
+            delimitation_probs=delimitation_probs
+        )
+
+        # push to the same device as x
+        x_reshaped = x_reshaped.to(x.device)
+        x_ids = x_ids.to(x.device)
+
+        # pass through the actual byte embedding model
+        x_global = self.chunk_encoding_model(x_reshaped)
+
+        return x_global, x_ids, avg_chunk_len
+
+    def tokenize_input(self, input_string, truncate=False, add_eot=True):
+        token_ids = self.byte_tokenizer.encode(input_string)
+        # if add_eot:
+        #     token_ids.append(self.eot_token)
+        return token_ids
+
+    def decode(self, tokens):
+        """ Decode a tensor of tokens into a string. """
+        return self.byte_tokenizer.decode_batch(tokens)
+        
