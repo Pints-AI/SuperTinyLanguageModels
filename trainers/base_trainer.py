@@ -332,6 +332,10 @@ class BaseTrainer:
                 self.scaler.scale(loss).backward()
                 accumulated_loss += loss.item()
 
+            # Free up memory of temporary variables
+            del x, y, output, loss, additional_info_sub_dict
+            torch.cuda.empty_cache()
+
         # once graidents are accumulated, step 
         if self.cfg.trainer.optimizer.grad_clip > 0:
             # Unscale the gradients of the optimizer's assigned params in-place
@@ -362,7 +366,7 @@ class BaseTrainer:
 
     def run_training_loop(self):
         """Run the training loop"""
-        print("Training loop is starting")
+        torch.cuda.empty_cache()
         for iter_num in range(self.current_iter, self.cfg["trainer"]["max_iters"]):
             start_time = time.time()
             if self.lr_scheduler is not None:
@@ -390,7 +394,6 @@ class BaseTrainer:
                  ) ## ensure only the first GPU prints
             ):
                 self._save_model(iter_num)
-
 
             lossf, additional_info_dict = self._run_step() 
             end_time = time.time()

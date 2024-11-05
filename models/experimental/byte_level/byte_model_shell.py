@@ -129,8 +129,8 @@ class ByteAutoencoderModelShell(torch.nn.Module):
         # exit()
 
         # autoregressive (ad'hoc)
-        embeddings = embeddings[:, :-1]
-        target_ids = target_ids[:, 1:]
+        embeddings = embeddings[:, :-1, :]
+        target_ids = target_ids[:, 1:, :]
         # print(f"Embeddings: {embeddings.size()}") # [2, 635, 384]
         # print(f"target_ids: {target_ids.size()}") # [2, 635, 14]
         # input()

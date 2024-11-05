@@ -11,6 +11,8 @@ from models.components.tokenizers import build_tokenizer
 from models.embedding_models import EmbedderInterface
 from models.experimental.byte_level.layers import ByteLevelTransformerBlock
 
+from models.experimental.byte_level_copy.custom_embedder.chunker import CustomByteLevelEmbedder
+
 from models.components.transformer_blocks import GenericTransformerBlock
 from copy import deepcopy
 
@@ -19,40 +21,14 @@ class TokenizerEncoder(torch.nn.Module):
     Take seq of byte embeddings, return transformed sequence and attention mask.
     """
 
-    def __init__(self, num_delimiter_layers, byte_hidden):
+    def __init__(self, num_delimiter_layers, byte_hidden, model_cfg):
         super().__init__()
 
         self.num_delimiter_layers = num_delimiter_layers
         self.byte_hidden = byte_hidden
+        self.model_config = model_cfg
 
-        self.transformer = torch.nn.ModuleList(
-            [
-                GenericTransformerBlock(
-                    hidden_dim=self.byte_hidden,
-                    context_window=2048, #5 * 2048,
-                    ffn_cfg={
-                        "ffn_type": "generic",
-                        "ffn_dim": 4 * self.byte_hidden,
-                        "activation": "gelu",
-                        "normalization": "rms_norm",
-                        "bias": False,
-                        "dropout": 0.0,
-                    },
-                    attn_cfg={
-                        "attn_type": "causal",
-                        "num_kv_heads": 8,
-                        "num_q_heads": 8,
-                        "normalization": "rms_norm",
-                        "bias": False,
-                        "dropout": False,
-                        "pos_enc_cfg": {
-                            "positional_encoding_type": "rope"
-                        }
-                    },
-                )
-                for _ in range(self.num_delimiter_layers)
-            ]
-        )
+        self.custom_model = self._load_model("/home/pints/brewery/SuperTinyLanguageModels/embedder_model_weights_wiki_en.pth")
 
         self.end_of_seq_head = torch.nn.Linear(
             self.byte_hidden,
@@ -60,17 +36,21 @@ class TokenizerEncoder(torch.nn.Module):
             bias=True,
         ) # [Hello ][World!] (12, 32) -> (12, 1) 
 
-    def forward(self, x, x_ids):
-        # Pass through transformer blocks
-        x_transformed = x
-        for block in self.transformer:
-            x_transformed = block(x_transformed)
+    def _load_model(self, path: str) -> CustomByteLevelEmbedder:
+        model = CustomByteLevelEmbedder(model_cfg=self.model_config, device='cuda')
+        weights = torch.load(path)
+        weights = {k.replace("module.", ""): v for k, v in weights.items()}
+        model.load_state_dict(weights)
+        # Freeze all weights
+        for param in model.parameters():
+            param.requires_grad = False
+        
+        # Move the model to GPU and return
+        return model.cuda()
 
-        # Predict delimiters
-        logits = self.end_of_seq_head(x_transformed).squeeze(-1)  # Shape: (batch, seq_len)
-
+    def forward(self, x_ids):
         # Apply sigmoid activation
-        probs = torch.sigmoid(logits)
+        x_transformed, probs = self.custom_model(x_ids)
 
         # Determine chunk boundaries using a threshold
         threshold = 0.5  # Adjust as needed
@@ -80,7 +60,7 @@ class TokenizerEncoder(torch.nn.Module):
         
 
         batch_size, seq_len = end_of_chunk.size()
-        device = x.device
+        device = x_transformed.device
 
         # Initialize lists to store chunk boundaries and average chunk lengths
         chunk_spans = []
@@ -382,7 +362,6 @@ class ByteBidirectionEncoding(torch.nn.Module):
         target_mask = None
         return span_avgs, target_tensor, target_mask
 
-
 # B, 8192, 32 -> B, 8192/16, 16, 32 -> (B*8192/16), 16, 32
 class ByteLevelEmbedder(EmbedderInterface):
     """
@@ -399,23 +378,17 @@ class ByteLevelEmbedder(EmbedderInterface):
         self.hidden_dim = self.model_cfg["hidden_dim"]
         self.num_delimiter_layers = self.model_cfg["num_delimiter_layers"]
 
-
         self.byte_tokenizer = build_tokenizer(
-            tokenizer_type="bpe",
+            tokenizer_type=model_cfg["tokenizer_type"],
             vocab_size=model_cfg["vocab_size"],
             simplify=False,
-            dataset_name="simple_en_wiki",
+            dataset_name=model_cfg['tokenizer_dataset_name'],
         )
-
-        self.byte_embedder = torch.nn.Embedding(
-            num_embeddings=model_cfg["vocab_size"],
-            embedding_dim=model_cfg["byte_hidden"],
-            device="cuda"
-        ) #259*32  
 
         self.delimiter_model = TokenizerEncoder(
             byte_hidden=self.byte_hidden,
             num_delimiter_layers=self.num_delimiter_layers,
+            model_cfg=model_cfg
         )
 
         self.word_encoding_model = ByteBidirectionEncoding(
@@ -425,19 +398,14 @@ class ByteLevelEmbedder(EmbedderInterface):
         )
 
 
-
-
         # Store pad_token_id and eot_token as class attributes
         self.pad_token_id = self.byte_tokenizer.pad_token
         self.eot_token = self.byte_tokenizer.eot_token
 
     def forward(self, x):
-        # x: (batch_size, seq_len)
-        x_embedded = self.byte_embedder(x)  # (batch_size, seq_len, byte_hidden)
 
         # Pass through delimiter model
         x_transformed, output_token_ids, avg_chunk_len, attention_masks, chunk_spans, chunk_len_loss = self.delimiter_model(
-            x=x_embedded,
             x_ids=x,
         )
 

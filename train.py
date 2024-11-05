@@ -79,7 +79,7 @@ def basic_main(cfg):
     trainer.train()
 
 
-@hydra.main(config_path="configs/train", config_name="baseline-10m")
+@hydra.main(config_path="configs/train/experimental", config_name="byte_autoencoder_custom")
 def main(cfg):
     world_size = torch.cuda.device_count()
     if len(cfg) == 1:

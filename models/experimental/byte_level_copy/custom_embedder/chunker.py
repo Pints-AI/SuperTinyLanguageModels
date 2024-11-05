@@ -120,7 +120,7 @@ CONFIG = {
             "eval_dir": "/home/pints/brewery/SuperTinyLanguageModels/evals"
         },
         "seed": 489,
-        "device": "cpu"
+        "device": "cuda"
     }
 }
 
@@ -220,10 +220,10 @@ class CustomByteLevelEmbedder(EmbedderInterface):
         x_embedded = self.byte_embedder(x)  # (batch_size, seq_len, byte_hidden)
 
         # Pass through delimiter model
-        probs_end_tokens = self.delimiter_model(
+        x_transformed, probs_end_tokens = self.delimiter_model(
             x=x_embedded,
         )
-        return probs_end_tokens
+        return x_transformed, probs_end_tokens
 
     def tokenize_input(self,
                        input_string:str,
@@ -299,7 +299,7 @@ class EndByteClassifier(torch.nn.Module):
         # Apply sigmoid activation
         probs = torch.sigmoid(logits)
 
-        return probs
+        return x_transformed, probs
     
 def find_end_characters(tokens: List[str]) -> List[int]:
     """
@@ -351,7 +351,7 @@ def start(cfg):
         print(end_chars_pos)
         print(len(end_chars_pos))
     print("="*80)
-    print(f"Loss value: {compute_loss_for_end_token(torch.tensor(batch_end_chars_pos), end_bytes_probs)}")
+    print(f"Loss value: {compute_MSEloss_for_end_token(torch.tensor(batch_end_chars_pos), end_bytes_probs)}")
 
 
 if __name__ == "__main__":

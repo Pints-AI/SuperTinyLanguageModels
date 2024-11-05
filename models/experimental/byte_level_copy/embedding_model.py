@@ -69,6 +69,7 @@ class TokenizerEncoder(torch.nn.Module):
         # Predict delimiters
         logits = self.end_of_seq_head(x_transformed).squeeze(-1)  # Shape: (batch, seq_len)
 
+        # TODO: LOAD MODEL WEIGHTS AND THEN REPLACE BELOW PROBS
         # Apply sigmoid activation
         probs = torch.sigmoid(logits)
 
@@ -86,7 +87,7 @@ class TokenizerEncoder(torch.nn.Module):
         chunk_spans = []
         avg_chunk_len = []
 
-        # Set minimum and maximum chunk lengths
+        # Set minimum and maximum chunk lengths (TODO: NOT REQ; TO CHECK AGAIN)
         min_chunk_len = 3
         max_chunk_len = 16
 
@@ -363,7 +364,7 @@ class ByteBidirectionEncoding(torch.nn.Module):
         return span_avgs, target_tensor, target_mask
 
 
-
+# embedding model
 class ByteLevelEmbedder(EmbedderInterface):
     """
     Input is a sequence of byte-level token ids

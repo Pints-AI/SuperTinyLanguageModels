@@ -113,7 +113,11 @@ class GenericEmbedder(EmbedderInterface):
         )
 
         # build the positional encodings
-        self.positional_encodings = build_positional_encodings(model_cfg=model_cfg)
+        self.positional_encodings = build_positional_encodings(
+            pos_encoding_cfg=model_cfg, 
+            hidden_dim=model_cfg['hidden_dim'],
+            context_window=model_cfg['context_window'],
+            num_heads=model_cfg.get('num_heads', None))
         self.eot_token = self.tokenizer.eot_token
         self.model_cfg = model_cfg
 

@@ -49,17 +49,17 @@ if __name__ == "__main__":
     # tokenizer = get_canonical_tokenizer()
     # prepare_data(CONFIG, embedder, tokenizer)
 
-    x_train = Path("/home/pints/brewery/SuperTinyLanguageModels/data/simple_en_wiki/embedder_preprocessor/bpe-259-0/train_ids.bin")
-    y_train = Path("/home/pints/brewery/SuperTinyLanguageModels/data/simple_en_wiki/embedder_preprocessor/bpe-259-0/train_labels.bin")
-    x_val = Path("/home/pints/brewery/SuperTinyLanguageModels/data/simple_en_wiki/embedder_preprocessor/bpe-259-0/val_ids.bin")
-    y_val = Path("/home/pints/brewery/SuperTinyLanguageModels/data/simple_en_wiki/embedder_preprocessor/bpe-259-0/val_labels.bin")
+    x_train = Path("/home/pints/brewery/SuperTinyLanguageModels/data/en_wiki/embedder_preprocessor/bpe-259-0/train_ids.bin")
+    y_train = Path("/home/pints/brewery/SuperTinyLanguageModels/data/en_wiki/embedder_preprocessor/bpe-259-0/train_labels.bin")
+    x_val = Path("/home/pints/brewery/SuperTinyLanguageModels/data/en_wiki/embedder_preprocessor/bpe-259-0/val_ids.bin")
+    y_val = Path("/home/pints/brewery/SuperTinyLanguageModels/data/en_wiki/embedder_preprocessor/bpe-259-0/val_labels.bin")
 
     train_dataset = EndByteClassifierDataset(x_train, y_train, CONFIG)
     test_dataset = EndByteClassifierDataset(x_val, y_val, CONFIG)
 
     # MUST NOT SHUFFLE! due to the way we concatenate during tokenization
-    train_data_loader = DataLoader(train_dataset, batch_size=18, shuffle=False)
-    test_data_loader = DataLoader(test_dataset, batch_size=18, shuffle=False)
+    train_data_loader = DataLoader(train_dataset, batch_size=56, shuffle=False)
+    test_data_loader = DataLoader(test_dataset, batch_size=56, shuffle=False)
 
     for epoch in range(num_epochs):
         embedder.train()
@@ -94,6 +94,6 @@ if __name__ == "__main__":
 
 
     # save the embedder model
-    model_save_path = Path("./embedder_model_weights.pth")
+    model_save_path = Path("./embedder_model_weights_wiki_en.pth")
     torch.save(embedder.state_dict(), model_save_path)
     print(f"Model weights saved to {model_save_path}")

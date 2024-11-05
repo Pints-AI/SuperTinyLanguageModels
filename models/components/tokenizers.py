@@ -380,7 +380,7 @@ class BPETokenizer:
         # Remove special tokens if present
         tokens = [token for token in tokens if token not in self.SPECIAL_TOKENS.values()]
         
-        byte_sequence = bytes([self.inv_vocab.get(token, ord('?')) for token in tokens])  # Replace unknown tokens with '?'
+        byte_sequence = bytes([token if token in self.inv_vocab else ord('?') for token in tokens])  # Replace unknown tokens with '?'
         try:
             text = byte_sequence.decode('utf-8', errors='replace')  # Decode bytes to string
         except UnicodeDecodeError:
