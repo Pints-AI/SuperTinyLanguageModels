@@ -34,6 +34,8 @@ def ddp_main(rank, world_size, cfg):
             checkpoint_path=cfg["model"].get("checkpoint_path", None),
             device=cfg["general"]["device"]
         )
+        # load weights # TODO remove
+        model.embedding_model.delimiter_model._load_model_weights()
         model.to(cfg["general"]["device"])
         model.train()
         print(f"Rank{rank} Model built")
