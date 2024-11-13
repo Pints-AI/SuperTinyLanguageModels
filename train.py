@@ -48,7 +48,7 @@ def ddp_main(rank, world_size, cfg):
         )
         print(f"Rank{rank} Trainer built")
         # train the model
-        trainer.train()
+        # trainer.train()
     
     finally:
         # clean up

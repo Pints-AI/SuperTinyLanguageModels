@@ -59,7 +59,70 @@ class DatasetInterface(torch.utils.data.IterableDataset):
     def __iter__(self, idx):
         raise NotImplementedError
     
+class ByteDelimitationDataset(torch.utils.data.IterableDataset):
+    def __init__(self, split, cfg):
+        """
+        Arguments:
+            cfg: the train script cfg
+        """
+        super().__init__()
+        self.cfg = cfg
+        # dataset_names = self.cfg["trainer"]["dataset_names"]
+        self.context_window = self.cfg["model"]["context_window"]
+        
+        # # Create a unique identifier for the combined datasets
+        self.input_data_path = os.path.join(
+            get_preprocessed_data_path(cfg),
+            f"{split}.bin"
+        )
+        self.delimitations_data_path = os.path.join(
+            get_preprocessed_data_path(cfg),
+            f"{split}_delimitations.bin"
+        )
+        
+        self._load_data()
+        self.dataset_len = len(self.input_data) - self.context_window
+
+
+    def _load_data(self):
+        """
+        Get data
+        """
+        if not os.path.exists(self.data_path):
+            raise FileNotFoundError(f"{self.data_path} does not exist, preprocess the data first")
+        self.input_data = np.memmap(
+            self.input_data_path,
+            dtype=np.uint8,
+            mode="r",
+        )
+
+        self.delimitations_data = np.memmap(
+            self.delimitations_data_path,
+            dtype=np.uint8,
+            mode="r",
+        )
+
+    def __len__(self):
+        """
+        Return dataset length
+        """
+        return self.dataset_len
     
+    def __iter__(self, idx):
+        """
+        Get a batch of random data points in an infinite loop.
+        """
+        while True:
+            # Get a random index
+            idx = random.randint(0, self.dataset_len - 1) 
+        
+            # Extract a slice of data for x and y
+            x = torch.from_numpy((self.input_data[idx: idx + self.context_window]).astype(np.int64))
+            y = torch.from_numpy((self.delimitations_data[idx: idx + self.context_window]).astype(np.int64))
+            
+            # Yield the data points
+            yield x, y
+
 class BaseDatasetRandom(DatasetInterface):
     """
     Simple base dataloader for standard gpt-2'esk architectures and training.
@@ -124,7 +187,8 @@ class DocumentClassificationDataset(torch.utils.data.Dataset):
 
 DATASET_REGISTRY = {
     "random": BaseDatasetRandom,
-    "text_classification": DocumentClassificationDataset
+    "text_classification": DocumentClassificationDataset,
+    "byte_delimitation": ByteDelimitationDataset,
 }
 
 def build_dataset(cfg, split):
