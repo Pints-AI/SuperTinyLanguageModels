@@ -111,7 +111,7 @@ class ByteModelShell(torch.nn.Module):
         self.device = device
         return super().to(device, *args, **kwargs)
 
-    def forward(self, token_ids, attn_mask = None):
+    def forward(self, token_ids, delimitations, attn_mask = None):
         """
         The default forward pass is used for training and
         accepts the token_ids as input.
@@ -124,7 +124,7 @@ class ByteModelShell(torch.nn.Module):
         """
         # Pass the token_ids through the embedding model
         # to get embeddings and target_ids (B, S, H) and (B, S)
-        embeddings, target_ids, avg_chunk_len = self.embedding_model(token_ids) 
+        embeddings, target_ids, avg_chunk_len = self.embedding_model(token_ids, delimitations) 
         # print(embeddings.size())
         # print(f"Embeddings: {embeddings.size()}") # [2, 635, 384]
         # print(f"target_ids: {target_ids.size()}") # [2, 635, 14]

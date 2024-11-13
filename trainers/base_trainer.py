@@ -266,6 +266,7 @@ class BaseTrainer:
         accumulated_loss = 0
         for i in range(self.gradient_accumulation_steps):
             # get the next batch
+            # IN THIS EXPERIMENT, y is our DELIMITATIONS!
             x, y, attn_mask = next(self.train_dataloader_iter)
             x = x.to(self.gpu_id if self.gpu_id is not None else self.model.device)
             y = y.to(self.gpu_id if self.gpu_id is not None else self.model.device)
@@ -283,7 +284,7 @@ class BaseTrainer:
 
             with context_manager:
                 with self.ctx: 
-                    output, aux_loss = self.DDP_model(x, attn_mask)
+                    output, aux_loss = self.DDP_model(x, y, attn_mask)
                     loss = aux_loss #self.loss_fn(output, y)
                     # if aux_loss is not None:
                     #     loss += aux_loss
