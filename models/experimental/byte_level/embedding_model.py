@@ -52,7 +52,7 @@ class DelimiterModel(torch.nn.Module):
             1, # prob of sequence ending
         )
         self.device = "cuda" #model_cfg['general']['device']
-        # self._load_model_weights()
+        # self._load_model_weights() # loaded at train.py: 68 to avoid pytorch reinitialization
 
 
     def _load_model_weights(self):
@@ -95,6 +95,10 @@ class DelimiterModel(torch.nn.Module):
 
 
     def forward(self, x):
+        print('*'*80)
+        print(x.shape)
+        print(x)
+        print('*'*80)
         # pass throug embedder 
         x = self.byte_embedder(x)
         # Pass through transformer blocks 
@@ -106,7 +110,7 @@ class DelimiterModel(torch.nn.Module):
 
         # Apply sigmoid 
         probs = torch.sigmoid(logits)
-
+        print((probs > 0.5).int())
         return probs
         
 
@@ -302,6 +306,10 @@ class ByteLevelEmbedder(EmbedderInterface):
                 # add end token
                 output_token_ids[batch, i, chunk_len] = self.eot_token
 
+        print('-'*80)
+        print(output_token_ids.shape)
+        print(output_token_ids)
+        print('-'*80)
         return output_tensor, output_token_ids, sum(avg_chunk_len)/len(avg_chunk_len)
 
 

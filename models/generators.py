@@ -496,8 +496,7 @@ class EntropyTemperatureGenerator(BaseGenerator):
 
 class BeamSearchGenerator(BaseGenerator):
     def __init__(self, model, generate_cfg, device="cuda"):
-        super().__init__()
-        self.model = model
+        super().__init__(model)
         self.device = device
         self.model = self.model.to(torch.device(self.device))
         self.generate_config = generate_cfg
@@ -527,7 +526,8 @@ class BeamSearchGenerator(BaseGenerator):
             all_candidates = []
             for seq, score in beam:
                 # Get logits for the entire sequence
-                logits = self.model.inference(seq)[0]
+                logits = self.model.inference(seq)[0][0]
+
                 # Consider only the last token's logits
                 last_token_logits = logits / temperature
 
@@ -586,7 +586,7 @@ class StandardGenerator(BaseGenerator):
         """Initialize the model and the configuration"""
         super().__init__(model)
         # self.model = model
-        self.device = device 
+        self.device = device
         self.model = self.model.to(torch.device(device))
         self.generate_config = generate_cfg
         ## self.temperature = generate_cfg.get("temperature", 1.0)

@@ -147,7 +147,33 @@ class ByteModelShell(torch.nn.Module):
         # input(target_ids.size()) # [2, 3456, 6]
         # input(avg_chunk_len)
         # exit()
+        
+        # print(logits.size())
+        # print(target_ids.size())
+        # print(torch.argmax(logits[:, -1], -1))
+        # print(target_ids[:, -1])
 
+
+        # print(torch.argmax(logits[:, -1], -1))
+        # print(target_ids[:, -1])
+
+
+        # print(torch.argmax(logits[:, -2], -1))
+        # print(target_ids[:, -2])
+
+
+        # print(torch.argmax(logits[:, -3], -1))
+        # print(target_ids[:, -3])
+
+
+        # # just get the first byte
+        # logits = torch.argmax(logits[:, :, 0], dim=-1)
+        # targets = target_ids[:, :, 0]
+
+        # print(logits)
+        # input(targets)
+
+        # input(self.embedding_model.pad_token)
 
         # Compute the loss, ignoring pad tokens
         loss = cross_entropy_loss_fn(
@@ -168,6 +194,7 @@ class ByteModelShell(torch.nn.Module):
 
 
         total_loss = loss #+ \
+        # input(total_loss)
         #    self.chunk_len_loss_weight * chunk_loss #+ \
         #self.chunk_len_penalty * length_loss
 
@@ -181,4 +208,32 @@ class ByteModelShell(torch.nn.Module):
             "total-loss": total_loss,
         }
         print(avg_chunk_len.item())
-        return core_output, total_loss #, additional_info_dict
+        return logits, total_loss #, additional_info_dict
+
+    @torch.no_grad()
+    def inference(self, model_input):
+        """
+        Takes a string or list of token ids as input,
+        and returns the decoded model output. The actual
+        decoding should happen in the decoding generator.
+        Args:
+            model_input: str or torch.tensor(B, S)
+        Returns:
+            logits: torch.tensor(B, S, V),
+        """
+        # check if input is string
+        if isinstance(model_input, str):
+            # use inference function of the embedding model
+            model_input = self.embedding_model.tokenize_input(model_input, truncate=True, add_eot=False)
+
+        if isinstance(model_input, torch.Tensor):
+            x = model_input.to(device=self.device, dtype=torch.long).unsqueeze(0)
+        else:
+            x = torch.tensor(model_input, device=self.device, dtype=torch.long).unsqueeze(0)
+        
+        embeddings, target_ids, avg_chunk_len = self.embedding_model(model_input)
+
+        core_output = self.core_model(embeddings, None)
+
+        logits = self.model_head.inference(core_output)
+        return logits, model_input
