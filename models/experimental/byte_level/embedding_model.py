@@ -306,10 +306,6 @@ class ByteLevelEmbedder(EmbedderInterface):
                 # add end token
                 output_token_ids[batch, i, chunk_len] = self.eot_token
 
-        print('-'*80)
-        print(output_token_ids.shape)
-        print(output_token_ids)
-        print('-'*80)
         return output_tensor, output_token_ids, sum(avg_chunk_len)/len(avg_chunk_len)
 
 
