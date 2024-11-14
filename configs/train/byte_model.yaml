@@ -99,18 +99,18 @@ model:
 trainer:
   trainer_type: base_trainer
 
-  dataset_names: fineweb_edu_10B # en_wiki #[fineweb_edu_10B, MATH]
-  preprocessor_name: text_preprocessor
-  dataloader_name: random
+  dataset_names: en_wiki #fineweb_edu_10B #[fineweb_edu_10B, MATH]
+  preprocessor_name: embedder_preprocessor
+  dataloader_name: byte_delimitation
   
   
   batch_size: 8 # 6
-  gradient_accumulation_steps: 14 
+  gradient_accumulation_steps: 14
 
   max_iters: 100000
   eval_interval: 50000000
   log_interval: 10
-  checkpoint_interval: 6000
+  checkpoint_interval: 1000
 
   # eval:
   #   # benchmarks:
