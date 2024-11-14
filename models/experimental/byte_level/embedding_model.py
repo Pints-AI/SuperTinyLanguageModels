@@ -314,9 +314,10 @@ class ByteLevelEmbedder(EmbedderInterface):
 
 
 
-    def forward(self, x):
+    def forward(self, x, delimitations):
         # delimit the sequence
-        delimitation_probs = self.delimiter_model(x)
+        # delimitation_probs = self.delimiter_model(x)
+        delimitation_probs = torch.tensor(delimitations, device=x.device)
 
         # embed x
         x_embedded = self.byte_embedder(x)
