@@ -95,10 +95,6 @@ class DelimiterModel(torch.nn.Module):
 
 
     def forward(self, x):
-        print('*'*80)
-        print(x.shape)
-        print(x)
-        print('*'*80)
         # pass throug embedder 
         x = self.byte_embedder(x)
         # Pass through transformer blocks 
@@ -110,7 +106,6 @@ class DelimiterModel(torch.nn.Module):
 
         # Apply sigmoid 
         probs = torch.sigmoid(logits)
-        print((probs > 0.5).int())
         return probs
         
 

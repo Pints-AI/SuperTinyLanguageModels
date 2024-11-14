@@ -4,9 +4,12 @@ The main generate code
 
 import hydra
 import torch
+import tiktoken
 
 from models.build_models import build_model
 from models.generators import build_generator
+
+from trainers.prepare import EmbedderPreProcessor
 
 
 @hydra.main(config_path="configs", config_name="generate")
@@ -32,36 +35,39 @@ def main(cfg):
 
 
     # test generation
-    input_text = "So you are writing a math textbook. You love your subject enough to put in the hours, and you probably have some ideas on how the standard presentation can be improved. You care about good pedagogy and want to engage your students. You know that writing a text for undergraduates requires a different style from writing a research paper or a scholarly article for colleagues. But how to achieve that style? A good first step is to adjust your linguistic goal from"
-    
+    input_text = "Long after the village lights had faded and the moon cast its silver glow over the empty fields, a figure moved silently along the forgotten road. Shadows stretched across the path, and the distant hoot of an owl echoed through the night. At the edge of the forest, where the trees stood like silent sentinels, there was a doorway carved into the ancient stone, hidden from all but the most watchful eyes. It was said that beyond the doorway lay secrets waiting to be uncovered, mysteries that only the brave could"    
     idx = model.embedding_model.tokenize_input(
         input_string=input_text,
         add_eot=False,
         truncate=False
     )
-    # tokenize input text 
-    idx = torch.tensor(idx).unsqueeze(0).to(torch.device(model.device))
 
-    eot_token = model.embedding_model.byte_tokenizer.eot_token
-    num_max_tokens = 20
-    for _ in range(num_max_tokens):
+    canonical_tokenizer = tiktoken.get_encoding('o200k_base')
+    preprocessor = EmbedderPreProcessor(model.embedding_model, canonical_tokenizer=canonical_tokenizer)
+    delimitations = preprocessor.process({"text": input_text})['labels']
+
+    # tokenize input text 
+    idx = torch.tensor(idx).unsqueeze(0).to(torch.device(model.device)) # 1, 340
+    delimitations = torch.tensor(delimitations).unsqueeze(0).to(torch.device(model.device))
+
+    original_idx_shape = idx.shape
+    
+    eot_token_id = model.embedding_model.eot_token
+    num_max_chunks = 40
+    for _ in range(num_max_chunks):
         # logits, _ = model.inference(idx)
         # decoded_text = model.embedding_model.byte_tokenizer.decode(idx.view(-1).tolist())
         # input(decoded_text)
 
-        logits, _ = model(idx)
-        print(idx.size())
-        print(logits.size())
-        input()
+        logits, _ = model(idx, delimitations) # batch, num chunks, chunk length, 259
         # check shape
         # input(logits.size()) # expected size [S, S_c, H_c]
 
         # get the actual logits
-        new_byte_logits = logits[0] #[0, -1, :, :] # [S_c, H_c]
+        new_byte_logits = logits[0][-1] #[0, -1, :, :] # [S_c, H_c]
 
         # print(logits[0])
         # input()
-        print(new_byte_logits)
         # decode all greedily
         tokens = torch.argmax(new_byte_logits, dim=-1) # [S_c, 1]
 
@@ -69,17 +75,20 @@ def main(cfg):
         # print(tokens==eot_token)
         # eot_token_index = tokens.where(tokens==eot_token)#, 1.0, 0.0) # TODO might not work like this
         # print(eot_token_index)
-        mask = tokens<256
 
-        new_tokens = tokens[mask]
-        print(idx)
-        print(new_tokens)
-        # print(new_tokens)
+
+        first_eot_id_idx = (tokens == eot_token_id).nonzero(as_tuple=True)[0][0]
+        new_tokens = tokens[:first_eot_id_idx]
+        
+        print(f"Input tokens: {idx}\n")
+        print(f"Generated tokens: {tokens}\n")
+        print(f"Masked tokens: {new_tokens}\n")
+        # print(new_tokens.shape)
 
 
         # decode new tokens
         decoded_text = model.embedding_model.byte_tokenizer.decode(new_tokens.tolist())
-        input(decoded_text)
+        # input(f"decoded chunk: {decoded_text}")
 
 
 
@@ -98,14 +107,18 @@ def main(cfg):
 
         # concatenate them to the idx tensor
         idx = torch.cat((idx, new_tokens.unsqueeze(0)), dim=1)
-        print(idx.size())
-
+        new_delimitations = torch.zeros_like(new_tokens)
+        new_delimitations[-1] = 1 # set 1 to the last char of the chunk
+        delimitations = torch.cat((delimitations, new_delimitations.unsqueeze(0)), dim=1)
         # print full decoded input
-        decoded_text = model.embedding_model.byte_tokenizer.decode(idx.tolist())
-        input(decoded_text)
+
+        decoded_text = model.embedding_model.byte_tokenizer.decode(idx.squeeze().tolist())
+        # input(f"\n\nNext input: {decoded_text}")
 
     # decode
-    decoded_text = model.embedding_model.byte_tokenizer.decode(idx.tolist())
+    num_new_tokens = idx.shape[1] - original_idx_shape[1]
+    all_generated_chunks = idx[:, -num_new_tokens:]
+    decoded_text = model.embedding_model.byte_tokenizer.decode(all_generated_chunks.squeeze().tolist())
 
     # print the amazing new text
     print(decoded_text)
