@@ -88,8 +88,10 @@ class ByteDelimitationDataset(torch.utils.data.IterableDataset):
         """
         Get data
         """
-        if not os.path.exists(self.data_path):
-            raise FileNotFoundError(f"{self.data_path} does not exist, preprocess the data first")
+        if not os.path.exists(self.input_data_path):
+            raise FileNotFoundError(f"{self.input_data_path} does not exist, preprocess the data first")
+        if not os.path.exists(self.delimitations_data_path):
+            raise FileNotFoundError(f"{self.delimitations_data_path} does not exist, preprocess the data first")
         self.input_data = np.memmap(
             self.input_data_path,
             dtype=np.uint8,
@@ -108,7 +110,7 @@ class ByteDelimitationDataset(torch.utils.data.IterableDataset):
         """
         return self.dataset_len
     
-    def __iter__(self, idx):
+    def __iter__(self):
         """
         Get a batch of random data points in an infinite loop.
         """
