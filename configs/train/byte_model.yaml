@@ -1,7 +1,7 @@
 model:
   core_model:
     core_model_type: generic
-  num_layers: 6
+  num_layers: 8
   
   ffn:
     name: generic
@@ -82,7 +82,7 @@ model:
 
   max_chunk_length: 16
   hidden_dim: 384
-  context_window: 4096
+  context_window: 2048
   num_byte_decoder_layers: 8
 
   lm_head_type: byte_level_head
@@ -104,8 +104,8 @@ trainer:
   dataloader_name: byte_delimitation
   
   
-  batch_size: 8 # 6
-  gradient_accumulation_steps: 14
+  batch_size: 24 # 6
+  gradient_accumulation_steps: 32
 
   max_iters: 100000
   eval_interval: 50000000

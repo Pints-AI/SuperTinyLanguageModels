@@ -60,7 +60,7 @@ class DatasetInterface(torch.utils.data.IterableDataset):
         raise NotImplementedError
     
 class ByteDelimitationDataset(torch.utils.data.IterableDataset):
-    def __init__(self, split, cfg):
+    def __init__(self, split, cfg, seed=42):
         """
         Arguments:
             cfg: the train script cfg
@@ -117,10 +117,17 @@ class ByteDelimitationDataset(torch.utils.data.IterableDataset):
         while True:
             # Get a random index
             idx = random.randint(0, self.dataset_len - 1) 
-        
+            seq_len = random.randint(2, self.context_window)
+
+          
+            input_data = np.copy(self.input_data[idx: idx + self.context_window]).astype(np.int64)
+            input_data[seq_len:] = -1
+            # delimitation_data = np.copy(self.delimitations_data[idx: idx + self.context_window]).astype(np.int64)
+            # delimitation_data[seq_len:] = -1
+
             # Extract a slice of data for x and y
-            x = torch.from_numpy((self.input_data[idx: idx + self.context_window]).astype(np.int64))
-            y = torch.from_numpy((self.delimitations_data[idx: idx + self.context_window]).astype(np.int64))
+            x = torch.from_numpy((input_data))
+            y = x
             
             # Yield the data points
             yield x, y

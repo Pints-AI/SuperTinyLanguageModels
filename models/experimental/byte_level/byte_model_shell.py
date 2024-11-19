@@ -58,6 +58,7 @@ class ByteModelShell(torch.nn.Module):
         model_head,
     ):
         super().__init__()
+
         self.embedding_model = embedding_model
         self.core_model = core_model
         self.model_head = model_head
@@ -122,9 +123,17 @@ class ByteModelShell(torch.nn.Module):
         Returns:
             Tuple[Tensor, Tensor]: The core model output and the loss.
         """
+
+        # We will ignore delimitations here as we are doing to delimit it inside the embedding model
+        # This is because we cannot pre-delimited when in-between sequence.
+
         # Pass the token_ids through the embedding model
         # to get embeddings and target_ids (B, S, H) and (B, S)
-        embeddings, target_ids, avg_chunk_len = self.embedding_model(token_ids, delimitations) 
+        # embeddings, target_ids, avg_chunk_len = self.embedding_model(token_ids) 
+        embeddings, target_ids, num_chunks, avg_chunk_len = self.embedding_model(token_ids) 
+
+
+
         # print(embeddings.size())
         # print(f"Embeddings: {embeddings.size()}") # [2, 635, 384]
         # print(f"target_ids: {target_ids.size()}") # [2, 635, 14]
@@ -132,8 +141,8 @@ class ByteModelShell(torch.nn.Module):
         # exit()
 
         # autoregressive (ad'hoc)
-        embeddings = embeddings[:, :-1]
-        target_ids = target_ids[:, 1:]
+        # embeddings = embeddings[:, :-1]
+        # target_ids = target_ids[:, 1:]
         # print(f"Embeddings: {embeddings.size()}") # [2, 635, 384]
         # print(f"target_ids: {target_ids.size()}") # [2, 635, 14]
         # input()
@@ -142,6 +151,12 @@ class ByteModelShell(torch.nn.Module):
 
         # Pass the core model output through the model head to get logits (B, S, V)
         logits = self.model_head(core_output)
+        # essentially capture the prediction at the index specified by num_chunks
+        # e.g. num_chunks = [3, 6, 8]
+
+        indices = num_chunks - 1
+        logits = logits[torch.arange(len(num_chunks)), indices]
+        # logits = logits[:, num_chunks, :]
 
         # input(logits.size()) # [2, 3456, 6, 259]
         # input(target_ids.size()) # [2, 3456, 6]

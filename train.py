@@ -2,18 +2,17 @@
 The main training code
 """
 import os
+import random
 
+import torch
+from torch.distributed import destroy_process_group
+import torch.multiprocessing as mp
 import hydra
 
 from models.build_models import build_model
 from trainers.build_trainers import build_trainer, ddp_setup
 from trainers import base_trainer
 from trainers.utils import create_folder_structure, init_print_override, restore_print_override
-
-
-import torch
-from torch.distributed import destroy_process_group
-import torch.multiprocessing as mp
 from trainers.prepare import prepare_data
 
 
@@ -87,6 +86,8 @@ def basic_main(cfg):
 
 @hydra.main(config_path="configs/train", config_name="baseline-10m")
 def main(cfg):
+    random.seed(cfg['general']['seed'])
+    
     world_size = torch.cuda.device_count()
     if len(cfg) == 1:
         # TODO: this is a hot-fix for sub-folder configs. Fix later

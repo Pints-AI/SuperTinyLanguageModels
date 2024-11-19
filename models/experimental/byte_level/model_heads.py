@@ -34,27 +34,27 @@ class ByteLevelDecoder(torch.nn.Module):
         self.max_chunk_length = model_cfg["max_chunk_length"] + 1 
         self.num_byte_decoder_layers = model_cfg["num_byte_decoder_layers"]
 
-        self.projection = torch.nn.Linear(
-            in_features=self.hidden_dim, # 384
-            out_features=self.max_chunk_length * self.byte_hidden,
-            bias=False,
-        )
+        # self.projection = torch.nn.Linear(
+        #     in_features=self.hidden_dim, # 384
+        #     out_features=self.max_chunk_length * self.byte_hidden,
+        #     bias=False,
+        # )
 
         # build transformer block
-        self.transformer = torch.nn.ModuleList(
-            [
-                ByteLevelTransformerBlock(
-                    input_dim=model_cfg["byte_hidden_dim"],
-                    output_dim=model_cfg["byte_hidden_dim"],
-                    ffn_dim=model_cfg["byte_hidden_dim"]*4,
-                    context_window=model_cfg["max_chunk_length"],
-                    attn_cfg=model_cfg["byte_head_attn_dict"]
-                ) for _ in range(self.num_byte_decoder_layers)
-            ]
-        )
+        # self.transformer = torch.nn.ModuleList(
+        #     [
+        #         ByteLevelTransformerBlock(
+        #             input_dim=model_cfg["byte_hidden_dim"],
+        #             output_dim=model_cfg["byte_hidden_dim"],
+        #             ffn_dim=model_cfg["byte_hidden_dim"]*4,
+        #             context_window=model_cfg["max_chunk_length"],
+        #             attn_cfg=model_cfg["byte_head_attn_dict"]
+        #         ) for _ in range(self.num_byte_decoder_layers)
+        #     ]
+        # )
 
         self.lm_head = torch.nn.Linear(
-            in_features=self.byte_hidden, # 128
+            in_features=self.hidden_dim,
             out_features=self.byte_vocab_size, # 259 (256 bytes + 3 special)
             bias=False,
         )
@@ -64,22 +64,22 @@ class ByteLevelDecoder(torch.nn.Module):
         Bidirectionally decode all tokens at once
         """
         # project the latent embeddings
-        x = self.projection(x)
-        x = x.view(x.size(0), x.size(1), self.max_chunk_length, self.byte_hidden)
+        # x = self.projection(x)
+        # x = x.view(x.size(0), x.size(1), self.max_chunk_length, self.byte_hidden)
 
 
         # Reshape for transformer
-        B, S, _, _ = x.size()
-        x = x.view(B * S, self.max_chunk_length, self.byte_hidden).contiguous()
+        # B, S, _, _ = x.size()
+        # x = x.view(B * S, self.max_chunk_length, self.byte_hidden).contiguous()
 
         # pass through transformer
-        for block in self.transformer:
-            x = block(x)
+        # for block in self.transformer:
+        #     x = block(x)
         # pass final self.max_chunk_length byte tokens through lm head
         x = self.lm_head(x)
 
         # reshape and return
-        x = x.view(B, S, self.max_chunk_length, self.byte_vocab_size)
+        # x = x.view(B, S, self.max_chunk_length, self.byte_vocab_size)
         return x
 
     def inference(self, x):

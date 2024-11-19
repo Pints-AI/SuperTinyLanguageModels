@@ -14,6 +14,7 @@ from models.experimental.byte_level.layers import ByteLevelTransformerBlock
 from models.components.transformer_blocks import GenericTransformerBlock
 from copy import deepcopy
 
+import tiktoken
 
 
 # TODO
@@ -195,8 +196,9 @@ class ByteLevelEmbedder(EmbedderInterface):
             dataset_names=None,
             num_reserved_tokens=0,
         )
-        
 
+        self.canonical_tokenizer = tiktoken.get_encoding("o200k_base")
+        
         # Initialize the byte embedding 
         self.byte_embedder = torch.nn.Embedding(
             num_embeddings=model_cfg["vocab_size"],
@@ -305,29 +307,120 @@ class ByteLevelEmbedder(EmbedderInterface):
 
 
 
-    def forward(self, x, delimitations):
+    def forward(self, x):
         # delimit the sequence
         # delimitation_probs = self.delimiter_model(x)
-        delimitation_probs = torch.tensor(delimitations, device=x.device)
+        # delimitation_probs = torch.tensor(delimitations, device=x.device)
 
+
+        # x is prepared in bytes, so we need to turn it back into strings
+        original_strings_array = []
+        x_ids = []
+        for encoded_sentence in x: # tensor
+            # last byte will be used as target byte
+            end_idx = len(encoded_sentence) - 1
+            for idx, token_id in enumerate(encoded_sentence):
+                if token_id == -1:
+                    end_idx = idx - 1
+                    break
+            
+            original_sentence = self.byte_tokenizer.decode(encoded_sentence[:end_idx].tolist())
+            x_ids.append(encoded_sentence[end_idx])
+            original_strings_array.append(original_sentence)
+
+        # now we tokenize, so that we can later get the byte sequences from each token
+        tokenized_string_array = []
+
+        num_chunks  = []
+        for sentence in original_strings_array:
+            tokenized_string = self.canonical_tokenizer.encode(sentence, disallowed_special=())
+            tokenized_string_array.append(tokenized_string)
+            num_chunks.append(len(tokenized_string))
+
+        # for each of the token, we want to decode it back to string (subwords)
+        # and using these subwords we can then get a byte sequence that represe
+        bytes_array = [] # torch.tensor(device=x.device)
+        chunk_lengths = []
+        for tokenized_string in tokenized_string_array:
+            for token in tokenized_string:
+                token_string = self.canonical_tokenizer.decode([token])
+                encoded = self.byte_tokenizer.encode(token_string)
+
+                chunk_lengths.append(len(encoded))
+                # Check if padding is needed
+                if len(encoded) < self.max_chunk_length:
+                    # Calculate the padding needed
+                    padding_length = self.max_chunk_length - len(encoded)
+                    encoded.extend([self.byte_tokenizer.pad_token for _ in range(padding_length)])
+                else:
+                    # If already at or above desired length, truncate or keep as is
+                    encoded = encoded[:self.max_chunk_length]
+
+                bytes_array.append(encoded)
+
+        bytes_array = torch.tensor(bytes_array, device=x.device)
+   
         # embed x
-        x_embedded = self.byte_embedder(x)
+        x_embedded = self.byte_embedder(bytes_array)
 
-        # reshape based on delimitations
-        x_reshaped, x_ids, avg_chunk_len = self._reshape_sequence(
-            x_embedded=x_embedded,
-            x_ids=x,
-            delimitation_probs=delimitation_probs
+        pad_embedding = self.byte_embedder(torch.tensor([self.byte_tokenizer.pad_token], device=x.device))
+        batch_pad = torch.cat(
+            [pad_embedding for _ in range(16)],
+            dim=0
         )
+
+        x_reshaped = []
+        prefix = 0
+        max_token_lengths = max(num_chunks)
+        for idx in range(len(num_chunks)):
+            curr_token_count = num_chunks[idx]
+            num_batch_pads = max_token_lengths - curr_token_count
+
+
+            if num_batch_pads:
+                pad_embedding_repeats = torch.stack(
+                    [batch_pad for _ in range(num_batch_pads)],
+                    dim=0
+                )
+                sample_reshaped = torch.cat(
+                    [
+                        x_embedded[prefix: prefix+curr_token_count],
+                        pad_embedding_repeats
+                    ],
+                    dim=0
+                )
+            else:
+                sample_reshaped = x_embedded[prefix: prefix+curr_token_count]
+
+            # print(x_embedded[prefix: prefix+curr_token_count].shape)
+            # print(pad_embedding_repeats.shape)
+            # print(pad_embedding_repeats)
+
+            x_reshaped.append(sample_reshaped)
+            prefix += curr_token_count
+
+        
+        # for x in x_reshaped:
+        #     print(len(x), x.shape)
+        # print(num_chunks)
+        x_reshaped = torch.stack(x_reshaped)
+        # print(x_reshaped.shape)
+        # exit()
+        # # reshape based on delimitations
+        # x_reshaped, x_ids, avg_chunk_len = self._reshape_sequence(
+        #     x_embedded=x_embedded,
+        #     x_ids=x,
+        #     delimitation_probs=delimitation_probs
+        # )
 
         # push to the same device as x
         x_reshaped = x_reshaped.to(x.device)
-        x_ids = x_ids.to(x.device)
-
+        x_ids = torch.tensor(x_ids, device=x.device)
+        avg_chunk_len = torch.tensor(sum(chunk_lengths) / len(chunk_lengths), device=x.device)
         # pass through the actual byte embedding model
         x_global = self.chunk_encoding_model(x_reshaped)
 
-        return x_global, x_ids, avg_chunk_len
+        return x_global, x_ids, torch.tensor(num_chunks), avg_chunk_len
 
     def tokenize_input(self, input_string, truncate=False, add_eot=True):
         token_ids = self.byte_tokenizer.encode(input_string)
