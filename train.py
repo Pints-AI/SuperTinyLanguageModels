@@ -66,7 +66,7 @@ def basic_main(cfg):
         device=cfg["general"]["device"]
     )
     # load weights # TODO remove
-    model.embedding_model.delimiter_model._load_model_weights()
+    # model.embedding_model.delimiter_model._load_model_weights()
     model.to(cfg["general"]["device"])
     model.train()
     # print model weights
