@@ -130,9 +130,9 @@ class ByteModelShell(torch.nn.Module):
         # Pass the token_ids through the embedding model
         # to get embeddings and target_ids (B, S, H) and (B, S)
         # embeddings, target_ids, avg_chunk_len = self.embedding_model(token_ids) 
-        embeddings, target_ids, num_chunks, avg_chunk_len = self.embedding_model(token_ids) 
+        # embeddings, target_ids, num_chunks, avg_chunk_len = self.embedding_model(token_ids) 
 
-
+        embeddings, target_ids, _, _ = self.embedding_model(token_ids)
 
         # print(embeddings.size())
         # print(f"Embeddings: {embeddings.size()}") # [2, 635, 384]
@@ -141,8 +141,8 @@ class ByteModelShell(torch.nn.Module):
         # exit()
 
         # autoregressive (ad'hoc)
-        # embeddings = embeddings[:, :-1]
-        # target_ids = target_ids[:, 1:]
+        embeddings = embeddings[:, :-1]
+        target_ids = target_ids[:, 1:]
         # print(f"Embeddings: {embeddings.size()}") # [2, 635, 384]
         # print(f"target_ids: {target_ids.size()}") # [2, 635, 14]
         # input()
@@ -154,8 +154,8 @@ class ByteModelShell(torch.nn.Module):
         # essentially capture the prediction at the index specified by num_chunks
         # e.g. num_chunks = [3, 6, 8]
 
-        indices = num_chunks - 1
-        logits = logits[torch.arange(len(num_chunks)), indices]
+        # indices = num_chunks - 1
+        # logits = logits[torch.arange(len(num_chunks)), indices]
         # logits = logits[:, num_chunks, :]
 
         # input(logits.size()) # [2, 3456, 6, 259]
@@ -215,14 +215,14 @@ class ByteModelShell(torch.nn.Module):
 
         #print(f"Total Loss: {total_loss}, Chunk Loss: {chunk_loss}, BCE Loss: {loss}")
 
-        additional_info_dict = {
-            "average_chunk_length": avg_chunk_len.item(),
-            # "chunk_len_loss": self.chunk_len_loss_weight*chunk_loss,
-            # "chunk_len_penalty_loss": self.chunk_len_penalty*length_loss,
-            "BCE-loss": loss,
-            "total-loss": total_loss,
-        }
-        print(avg_chunk_len.item())
+        # additional_info_dict = {
+        #     "average_chunk_length": avg_chunk_len.item(),
+        #     # "chunk_len_loss": self.chunk_len_loss_weight*chunk_loss,
+        #     # "chunk_len_penalty_loss": self.chunk_len_penalty*length_loss,
+        #     "BCE-loss": loss,
+        #     "total-loss": total_loss,
+        # }
+        # print(avg_chunk_len.item())
         return logits, total_loss #, additional_info_dict
 
     @torch.no_grad()

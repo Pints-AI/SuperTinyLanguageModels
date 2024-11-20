@@ -116,20 +116,26 @@ class ByteDelimitationDataset(torch.utils.data.IterableDataset):
         """
         while True:
             # Get a random index
-            idx = random.randint(0, self.dataset_len - 1) 
-            seq_len = random.randint(2, self.context_window)
+            # idx = random.randint(0, self.dataset_len - 1) 
+            # seq_len = random.randint(2, self.context_window)
 
           
-            input_data = np.copy(self.input_data[idx: idx + self.context_window]).astype(np.int64)
-            input_data[seq_len:] = -1
-            # delimitation_data = np.copy(self.delimitations_data[idx: idx + self.context_window]).astype(np.int64)
-            # delimitation_data[seq_len:] = -1
+            # input_data = np.copy(self.input_data[idx: idx + self.context_window]).astype(np.int64)
+            # input_data[seq_len:] = -1
+            # # delimitation_data = np.copy(self.delimitations_data[idx: idx + self.context_window]).astype(np.int64)
+            # # delimitation_data[seq_len:] = -1
 
-            # Extract a slice of data for x and y
-            x = torch.from_numpy((input_data))
-            y = x
+            # # Extract a slice of data for x and y
+            # x = torch.from_numpy((input_data))
+            # y = x
             
-            # Yield the data points
+            # # Yield the data points
+            # yield x, y
+
+            idx = random.randint(0, self.dataset_len -1)
+            x = torch.from_numpy((self.input_data[idx: idx + self.context_window]).astype(np.int64))
+            y = x
+
             yield x, y
 
 class BaseDatasetRandom(DatasetInterface):
