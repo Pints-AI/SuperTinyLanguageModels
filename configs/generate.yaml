@@ -1,7 +1,7 @@
 defaults:
   - generator: standard
   - _self_
-model_ckpt: "outputs/2024-11-14/02-35-24/checkpoints/ckpt_6000.pt"
+model_ckpt: "outputs/2024-11-19/12-17-04/checkpoints/ckpt_22000.pt"
 attention_type: rope_attention
 max_new_tokens: 200
 input_text: ""

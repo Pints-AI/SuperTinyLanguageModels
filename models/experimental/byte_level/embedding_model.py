@@ -213,7 +213,7 @@ class ByteLevelEmbedder(EmbedderInterface):
         # self.register_buffer("eot_token_embedding", eot_token_embedding)
         # self.register_buffer("pad_token_embedding", pad_token_embedding)
         # Initialize the delimiter model
-        self.delimiter_model = DelimiterModel(model_cfg=model_cfg)
+        # self.delimiter_model = DelimiterModel(model_cfg=model_cfg)
         # print("Delimeter:", self.delimiter_model.end_of_seq_head.weight)
 
         # Initialize the bidirectional embedding model
