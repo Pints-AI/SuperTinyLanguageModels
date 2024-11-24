@@ -1,7 +1,7 @@
 generator_type: beam_search
 temperature: 1.2
 top_k: 200
-max_new_tokens: 100
+max_new_tokens: 250
 beam_width: 15
 use_sampling: true
 repetition_penalty: 1.2

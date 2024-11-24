@@ -496,7 +496,7 @@ class EntropyTemperatureGenerator(BaseGenerator):
 
 class BeamSearchGenerator(BaseGenerator):
     def __init__(self, model, generate_cfg, device="cuda"):
-        super().__init__()
+        super().__init__(model)
         self.model = model
         self.device = device
         self.model = self.model.to(torch.device(self.device))

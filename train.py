@@ -34,6 +34,7 @@ def ddp_main(rank, world_size, cfg):
             checkpoint_path=cfg["model"].get("checkpoint_path", None),
             device=cfg["general"]["device"]
         )
+        print(model)
         model.to(cfg["general"]["device"])
         model.train()
         print(f"Rank{rank} Model built")

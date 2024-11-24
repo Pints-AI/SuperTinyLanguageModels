@@ -12,7 +12,6 @@ from models.generators import build_generator
 @hydra.main(config_path="configs", config_name="generate")
 def main(cfg):
     """run the main eval loop"""
-
     # set the checkpoint path to absolute path
     cfg["model_ckpt"] = hydra.utils.to_absolute_path(cfg["model_ckpt"])
 
@@ -29,14 +28,14 @@ def main(cfg):
 
     generator = build_generator(
         model=model,
-        generate_cfg=cfg["generator"],
+        generate_cfg=cfg['generator'],
         device=device
     )
 
     # generate the text
-    for _ in range(5): # generate 5 samples
+    for _ in range(1): # generate 5 samples
         generated_text = generator.default_generate(
-            input_text=cfg["generator"]["input_text"]
+            input_text=cfg["input_text"]
         )
         print("".join(generated_text))
 

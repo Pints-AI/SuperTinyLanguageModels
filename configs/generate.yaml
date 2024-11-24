@@ -1,7 +1,7 @@
 defaults:
   - generator: beam_search
   - _self_
-model_ckpt: "checkpoints/...pt"
-attention_type: standard_detailed
-max_new_tokens: 200
-input_text: "Earth is the third planet from the Sun and the only astronomical object known to harbor life. This is enabled by Earth being an ocean world, the only one in the Solar System sustaining liquid surface water."
+model_ckpt: "outputs/2024-11-24/10-07-24/checkpoints/ckpt_50000.pt"
+attention_type: rope_attention
+max_new_tokens: 300
+input_text: "Long after the village lights had faded and the moon cast its silver glow over the empty fields, a figure moved silently along the forgotten road. Shadows stretched across the path, and the distant hoot of an owl echoed through the night. At the edge of the forest, where the trees stood like silent sentinels, there was a doorway carved into the ancient stone, hidden from all but the most watchful eyes. It was said that beyond the doorway lay secrets waiting to be uncovered, mysteries that only the brave could"

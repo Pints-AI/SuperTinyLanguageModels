@@ -89,7 +89,7 @@ class BaseTrainer:
         self.use_wandb = cfg["general"]["logging"]["wandb_log"]
         self.checkpoint_dir = cfg["general"]["paths"]["checkpoint_dir"]
         self.batch_size = cfg["trainer"]["batch_size"] 
-        self.evaluate_byte_metrics = self.cfg["trainer"]["eval"].get("eval_byte_metrics", False)
+        self.evaluate_byte_metrics = self.cfg["trainer"].get("eval", {}).get("eval_byte_metrics", False)
 
 
         # print training statistics
@@ -338,12 +338,12 @@ class BaseTrainer:
                 lr = self.optimizer.param_groups[0]["lr"]
 
 
-            # Estimate model performance at intervals
-            if (not iter_num % self.cfg["trainer"]["eval_interval"]):
-                self.estimate_performance(
-                    iter_num=iter_num,
-                    eval_iters=self.cfg["trainer"].get("val_loss_iters", 100) # Default 100
-                )
+            # # Estimate model performance at intervals
+            # if (not iter_num % self.cfg["trainer"]["eval_interval"]):
+            #     self.estimate_performance(
+            #         iter_num=iter_num,
+            #         eval_iters=self.cfg["trainer"].get("val_loss_iters", 100) # Default 100
+            #     )
 
             
 
